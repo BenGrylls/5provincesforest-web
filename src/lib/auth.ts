@@ -1,0 +1,130 @@
+import { timingSafeEqual } from 'crypto';
+import { verifyPassword } from './security';
+import { query } from './db';
+
+const SESSION_COOKIE = 'admin_token';
+
+function configured(value: string | undefined): value is string {
+  return Boolean(value && value.length >= 16);
+}
+
+function present(value: string | undefined): value is string {
+  return Boolean(value && value.length > 0);
+}
+
+function safelyMatches(value: string, expected: string) {
+  try {
+    const actual = Buffer.from(value);
+    const target = Buffer.from(expected);
+    return actual.length === target.length && timingSafeEqual(actual, target);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate login credentials
+ * Supports both hashed and plaintext passwords for backward compatibility
+ */
+export async function isValidLogin(username: unknown, password: unknown) {
+  const expectedUsername = process.env.ADMIN_USERNAME;
+  const expectedPassword = process.env.ADMIN_PASSWORD;
+
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return false;
+  }
+
+  if (!present(expectedUsername) || !present(expectedPassword)) {
+    return false;
+  }
+
+  // Username comparison (timing-safe)
+  if (!safelyMatches(username, expectedUsername)) {
+    return false;
+  }
+
+  // Password comparison
+  // Try bcrypt hash first (if password starts with $2a$ or $2b$ or $2y$)
+  if (expectedPassword.startsWith('$2')) {
+    try {
+      return await verifyPassword(password, expectedPassword);
+    } catch {
+      return false;
+    }
+  }
+
+  // Fallback to plaintext comparison (timing-safe) for backward compatibility
+  return safelyMatches(password, expectedPassword);
+}
+
+/**
+ * Check if request has valid authentication token
+ * Uses the standard Cookie header, supported by all route handler requests.
+ */
+export function isAuthenticated(request: Request) {
+  const sessionToken = process.env.ADMIN_SESSION_TOKEN;
+  
+  if (!configured(sessionToken)) {
+    return false;
+  }
+
+  const token = request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))
+    ?.slice(`${SESSION_COOKIE}=`.length);
+
+  return token !== undefined && safelyMatches(token, sessionToken);
+}
+
+/**
+ * Check if authentication is properly configured
+ */
+export function isAuthConfigured() {
+  return present(process.env.ADMIN_USERNAME)
+    && present(process.env.ADMIN_PASSWORD)
+    && configured(process.env.ADMIN_SESSION_TOKEN);
+}
+
+export { SESSION_COOKIE };
+export const ADMIN_ROLE_COOKIE = 'admin_role';
+export const ADMIN_USERNAME_COOKIE = 'admin_username';
+
+export type ContentCategory = 'news' | 'media' | 'publications';
+
+const CATEGORY_PERMISSIONS: Record<ContentCategory, string> = {
+  news: 'ข่าวสารและกิจกรรม',
+  media: 'สื่อและสารคดีธรรมชาติ',
+  publications: 'คลังเอกสารและวารสาร',
+};
+
+function readCookie(request: Request, name: string) {
+  return request.headers
+    .get('cookie')
+    ?.split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
+}
+
+export async function getAdminSession(request: Request) {
+  if (!isAuthenticated(request)) return null;
+  const role = readCookie(request, ADMIN_ROLE_COOKIE) || 'super_admin';
+  const username = readCookie(request, ADMIN_USERNAME_COOKIE) || process.env.ADMIN_USERNAME || '';
+  if (role !== 'sub_admin') {
+    return { role: 'super_admin' as const, username, permissions: Object.values(CATEGORY_PERMISSIONS) };
+  }
+  const result = await query('SELECT permissions FROM sub_admins WHERE username = $1', [username]);
+  return { role: 'sub_admin' as const, username, permissions: Array.isArray(result.rows[0]?.permissions) ? result.rows[0].permissions : [] };
+}
+
+export async function canAccessCategory(request: Request, category: ContentCategory) {
+  const session = await getAdminSession(request);
+  return Boolean(session && (session.role === 'super_admin' || session.permissions.includes(CATEGORY_PERMISSIONS[category])));
+}
+
+export async function canManageCommittee(request: Request) {
+  const session = await getAdminSession(request);
+  return Boolean(session && (session.role === 'super_admin' || session.permissions.includes('โครงสร้างคณะกรรมการ')));
+}
