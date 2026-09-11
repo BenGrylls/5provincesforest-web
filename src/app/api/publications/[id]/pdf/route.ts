@@ -1,10 +1,10 @@
 import { readFile } from 'fs/promises';
-import path from 'path';
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { resolveUploadPath } from '@/lib/uploads';
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id < 1) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
@@ -16,8 +16,10 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const filename = path.basename(pdfFile);
-    const file = await readFile(path.join(process.cwd(), 'public', 'uploads', filename));
+    // เดิมใช้ path.basename() แล้วต่อกับ public/uploads ตรงๆ จึงอ่านไฟล์ในโฟลเดอร์ย่อยไม่ได้
+    const filePath = resolveUploadPath(pdfFile);
+    if (!filePath) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const file = await readFile(filePath);
     return new NextResponse(file, {
       headers: {
         'Content-Type': 'application/pdf',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { canManageHistory, isAuthenticated } from "@/lib/auth";
 
 export interface HistoryImageItem {
   id: string;
@@ -42,12 +43,22 @@ async function getSavedHistory(): Promise<HistoryData> {
   }
 }
 
+// GET เปิดสาธารณะโดยตั้งใจ — หน้า /about/history ของผู้เข้าชมทั่วไปอ่านผ่าน endpoint นี้
 export async function GET() {
   const data = await getSavedHistory();
   return NextResponse.json({ success: true, data });
 }
 
 export async function PUT(req: NextRequest) {
+  // เดิมไม่มีการตรวจสิทธิ์เลย ใครก็เขียนทับเนื้อหาหน้าประวัติได้โดยไม่ต้องเข้าสู่ระบบ
+  // และสิทธิ์ 'ประวัติความเป็นมา' ที่กำหนดให้ sub-admin ก็ไม่มีผลจริง
+  if (!isAuthenticated(req)) {
+    return NextResponse.json({ success: false, message: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  }
+  if (!await canManageHistory(req)) {
+    return NextResponse.json({ success: false, message: "ไม่มีสิทธิ์แก้ไขประวัติความเป็นมา" }, { status: 403 });
+  }
+
   try {
     const body: HistoryData = await req.json();
 

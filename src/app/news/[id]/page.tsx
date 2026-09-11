@@ -55,8 +55,8 @@ function socialEmbedUrl(videoUrl: string) {
   return null;
 }
 
-export default async function NewsDetailPage({ params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export default async function NewsDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id < 1) notFound();
 
   let article: Article | undefined;

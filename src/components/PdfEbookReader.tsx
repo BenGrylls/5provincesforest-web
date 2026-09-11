@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader } from 'lucide-react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
+// pdfjs-dist v5 ขึ้นไปเปลี่ยนไฟล์ worker เป็น .mjs แล้ว (.min.js ไม่มีอยู่จริง ทำให้ build ไม่ผ่าน)
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 export default function PdfEbookReader({ url, title }: { url: string; title: string }) {
   const [pageCount, setPageCount] = useState<number | null>(null);

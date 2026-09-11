@@ -15,8 +15,8 @@
 // ไม่มีทางปลอมค่า role ได้ถ้าไม่รู้ ADMIN_SESSION_TOKEN (secret) ที่ใช้เซ็น
 //
 // ใช้ได้เฉพาะฝั่ง Node.js runtime เท่านั้น (API routes ปกติของ Next.js ที่ไม่ได้ประกาศ
-// runtime = 'edge') เพราะพึ่งพา Node 'crypto' โมดูล ห้าม import ไฟล์นี้ใน middleware.ts
-// (middleware รันบน Edge runtime ซึ่งไม่มีโมดูลนี้ให้ใช้)
+// runtime = 'edge') เพราะพึ่งพา Node 'crypto' โมดูล ห้าม import ไฟล์นี้ใน src/proxy.ts
+// (proxy รันบน Edge runtime ซึ่งไม่มีโมดูลนี้ให้ใช้)
 
 import { createHmac, timingSafeEqual } from 'crypto';
 

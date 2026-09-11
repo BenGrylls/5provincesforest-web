@@ -9,8 +9,8 @@ import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DepartmentDetailPage({ params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export default async function DepartmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const id = Number((await params).id);
   if (!Number.isSafeInteger(id)) notFound();
   const result = await query('SELECT title, description, responsibilities, sort_order FROM committee_units WHERE id = $1', [id]);
   const department = result.rows[0];

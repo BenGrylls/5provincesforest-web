@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
-  // Middleware runs on the Edge runtime (ไม่มี Node 'crypto' module ให้ใช้)
+// Next 16 เปลี่ยนชื่อ convention จาก middleware เป็น proxy (ไฟล์เดิมคือ src/middleware.ts)
+export function proxy(request: NextRequest) {
+  // proxy รันบน Edge runtime (ไม่มี Node 'crypto' module ให้ใช้)
   // เดิม token เป็นค่าคงที่ตัวเดียว (ADMIN_SESSION_TOKEN) จึงเทียบตรงๆ ได้
   // ตอนนี้ token ถูกเซ็นด้วย HMAC และเปลี่ยนไปทุก session (ดู src/lib/session.js)
   // จึงเทียบตรงๆ ที่นี่ไม่ได้อีกต่อไป — ที่นี่เช็คแค่ "มี cookie หรือไม่" เพื่อ redirect

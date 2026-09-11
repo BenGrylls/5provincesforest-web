@@ -144,3 +144,8 @@ export async function canManageCommittee(request: Request) {
   const session = await getAdminSession(request);
   return Boolean(session && (session.role === 'super_admin' || session.permissions.includes('โครงสร้างคณะกรรมการ')));
 }
+
+export async function canManageHistory(request: Request) {
+  const session = await getAdminSession(request);
+  return Boolean(session && (session.role === 'super_admin' || session.permissions.includes('ประวัติความเป็นมา')));
+}

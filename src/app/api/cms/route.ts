@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { canAccessCategory, ContentCategory, getAdminSession, isAuthenticated } from '@/lib/auth';
-import { isImage, isVideo, isPdf, saveUpload } from '@/lib/uploads';
+import { isImage, isVideo, isPdf, saveUpload, type UploadFolder } from '@/lib/uploads';
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -71,18 +71,21 @@ export async function POST(request: Request) {
       if (imageFiles.some((file) => !isImage(file))) {
         return NextResponse.json({ error: 'รูปภาพต้องเป็น JPG, PNG หรือ WebP' }, { status: 400 });
       }
-      pathsArray.push(...await Promise.all(imageFiles.map(saveUpload)));
+      // ไฟล์ของบทความเก็บในโฟลเดอร์ตามหมวดของบทความนั้น (news / media / publications)
+      const folder = category as UploadFolder;
+      // เดิมเขียน imageFiles.map(saveUpload) ซึ่งส่ง (file, index, array) เข้าฟังก์ชันด้วย
+      pathsArray.push(...await Promise.all(imageFiles.map((file) => saveUpload(file, folder))));
 
       const video = body.get('videoFile');
       if (video instanceof File && video.size > 0) {
         if (!isVideo(video)) return NextResponse.json({ error: 'วิดีโอต้องเป็น MP4 หรือ WebM' }, { status: 400 });
-        videoFile = await saveUpload(video);
+        videoFile = await saveUpload(video, folder);
       }
 
       const pdf = body.get('pdfFile');
       if (pdf instanceof File && pdf.size > 0) {
         if (!isPdf(pdf)) return NextResponse.json({ error: 'ไฟล์ต้องเป็น PDF เท่านั้น' }, { status: 400 });
-        pdfFile = await saveUpload(pdf);
+        pdfFile = await saveUpload(pdf, folder);
       }
     }
 

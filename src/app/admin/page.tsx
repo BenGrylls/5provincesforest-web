@@ -1,170 +1,198 @@
 'use client';
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FileText, Users, Settings, KeyRound, LogOut, ChevronDown, ChevronUp, Newspaper, Film, BookOpen, History, Landmark } from 'lucide-react';
-import HistoryModal from '@/components/admin/HistoryModal';
+
+import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { BookOpen, Film, Newspaper, Plus, Users, type LucideIcon } from 'lucide-react';
+import AdminShell from '@/components/admin/AdminShell';
+import { EmptyState, TableSkeleton } from '@/components/admin/States';
+import { useAdminSession } from '@/components/admin/useAdminSession';
+
+type Article = {
+  id: number;
+  title: string;
+  category: string;
+  published_at?: string;
+};
+
+const CATEGORIES = [
+  { key: 'news', label: 'ข่าวและกิจกรรม', permission: 'ข่าวสารและกิจกรรม', icon: Newspaper, href: '/admin/content?tab=news', accent: 'text-forest-700 bg-forest-50' },
+  { key: 'media', label: 'สื่อและสารคดี', permission: 'สื่อและสารคดีธรรมชาติ', icon: Film, href: '/admin/content?tab=media', accent: 'text-blue-700 bg-blue-50' },
+  { key: 'publications', label: 'เอกสารและวารสาร', permission: 'คลังเอกสารและวารสาร', icon: BookOpen, href: '/admin/content?tab=publications', accent: 'text-amber-700 bg-amber-50' },
+] as const;
+
+const CATEGORY_LABEL: Record<string, string> = {
+  news: 'ข่าวและกิจกรรม',
+  media: 'สื่อและสารคดี',
+  publications: 'เอกสารและวารสาร',
+};
+
+function relativeTime(value?: string) {
+  if (!value) return '—';
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return '—';
+  const minutes = Math.round((Date.now() - then) / 60000);
+  if (minutes < 1) return 'เมื่อสักครู่';
+  if (minutes < 60) return `${minutes} นาทีที่แล้ว`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} ชม. ที่แล้ว`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'เมื่อวาน';
+  if (days < 31) return `${days} วันที่แล้ว`;
+  return new Date(value).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function StatCard({ label, value, icon: Icon, accent, href, loading }: {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  accent: string;
+  href: string;
+  loading: boolean;
+}) {
+  return (
+    <Link href={href} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 hover:shadow transition block">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${accent}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      {loading ? (
+        <div className="h-8 w-12 bg-gray-100 rounded animate-pulse" />
+      ) : (
+        <p className="text-3xl font-bold text-gray-900 leading-none">{value}</p>
+      )}
+      <p className="text-xs text-gray-500 mt-2">{label}</p>
+    </Link>
+  );
+}
 
 export default function AdminDashboard() {
-  const router = useRouter();
-  const [isContentOpen, setIsContentOpen] = useState(true);
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [role, setRole] = useState<'super_admin' | 'sub_admin'>('super_admin');
-  const [username, setUsername] = useState('');
-  const [permissions, setPermissions] = useState<string[] | null>(null);
+  const { session, loading: sessionLoading, isSuperAdmin, canManage } = useAdminSession();
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [recent, setRecent] = useState<Article[]>([]);
+  const [subAdminCount, setSubAdminCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const allowed = CATEGORIES.filter((category) => canManage(category.permission));
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const results = await Promise.all(
+      allowed.map(async (category) => {
+        try {
+          const response = await fetch(`/api/cms?category=${category.key}`);
+          const data = response.ok ? await response.json() : [];
+          return { key: category.key, items: (Array.isArray(data) ? data : []) as Article[] };
+        } catch {
+          return { key: category.key, items: [] as Article[] };
+        }
+      }),
+    );
+
+    setCounts(Object.fromEntries(results.map((result) => [result.key, result.items.length])));
+    setRecent(
+      results
+        .flatMap((result) => result.items.map((item) => ({ ...item, category: result.key })))
+        .sort((a, b) => new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime())
+        .slice(0, 5),
+    );
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed.map((category) => category.key).join(',')]);
 
   useEffect(() => {
-    fetch('/api/auth/session')
-      .then((response) => response.ok ? response.json() : null)
-      .then((session) => {
-        if (session?.role === 'sub_admin') setRole('sub_admin');
-        if (typeof session?.username === 'string') setUsername(session.username);
-        if (Array.isArray(session?.permissions)) setPermissions(session.permissions);
-      });
-  }, []);
+    if (sessionLoading) return;
+    load();
+  }, [sessionLoading, load]);
 
-  const isSuperAdmin = role === 'super_admin';
-  const canManage = (permission: string) => isSuperAdmin || permissions?.includes(permission);
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetch('/api/sub-admins')
+      .then((response) => (response.ok ? response.json() : []))
+      .catch(() => [])
+      .then((data) => setSubAdminCount(Array.isArray(data) ? data.length : 0));
+  }, [isSuperAdmin]);
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/admin/login');
-    router.refresh();
-  };
+  const busy = sessionLoading || loading;
 
   return (
-    <div className="min-h-screen bg-gray-100 flex font-sans">
-      {/* Sidebar ด้านซ้าย */}
-      <aside className="w-72 bg-forest-950 text-white flex flex-col hidden md:flex shrink-0">
-        <div className="p-6 border-b border-forest-900">
-          <h2 className="font-bold text-lg">Admin Control</h2>
-          <p className="text-xs text-forest-300">ระบบจัดการมูลนิธิป่ารอยต่อฯ</p>
+    <AdminShell
+      activeKey="overview"
+      title={`สวัสดี ${session?.username || 'ผู้ดูแลระบบ'}`}
+      description={isSuperAdmin ? 'จัดการเนื้อหา กำหนดสิทธิ์ และควบคุมการแสดงผลเว็บไซต์' : 'จัดการเนื้อหาตามสิทธิ์ที่ได้รับ'}
+      actions={
+        <span className={`text-xs px-3 py-1.5 rounded-full font-bold ${isSuperAdmin ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+          {isSuperAdmin ? 'Super Admin' : 'Sub-Admin'}
+        </span>
+      }
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {allowed.map((category) => (
+          <StatCard
+            key={category.key}
+            label={category.label}
+            value={counts[category.key] ?? 0}
+            icon={category.icon}
+            accent={category.accent}
+            href={category.href}
+            loading={busy}
+          />
+        ))}
+        {isSuperAdmin && (
+          <StatCard
+            label="ผู้ดูแลระบบย่อย"
+            value={subAdminCount ?? 0}
+            icon={Users}
+            accent="text-purple-700 bg-purple-50"
+            href="/admin/sub-admins"
+            loading={subAdminCount === null}
+          />
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="font-bold text-gray-900">แก้ไขล่าสุด</h2>
+          <p className="text-xs text-gray-500 mt-0.5">รายการที่เพิ่มหรือแก้ไขล่าสุดในหมวดที่คุณดูแล</p>
         </div>
-        <nav className="flex-1 p-4 space-y-2 text-sm overflow-y-auto">
-          <a href="/admin" className="block px-4 py-2.5 bg-forest-900 rounded-xl font-medium">ภาพรวมระบบ</a>
-          
-          {/* เมนูจัดการเนื้อหาแบบ Dropdown */}
-          <div>
-            <button 
-              onClick={() => setIsContentOpen(!isContentOpen)} 
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-forest-900/50 rounded-xl text-gray-300 transition"
-            >
-              <span>จัดการเนื้อหาเว็บไซต์</span>
-              {isContentOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            
-            {isContentOpen && (
-              <div className="ml-4 mt-1 pl-3 border-l border-forest-800 space-y-1 text-xs">
-                {canManage('ประวัติความเป็นมา') && (
-                  <button 
-                    onClick={() => setIsHistoryModalOpen(true)}
-                    className="w-full text-left px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2"
-                  >
-                    <Landmark className="w-3.5 h-3.5 text-amber-400" /> ประวัติความเป็นมา
-                  </button>
-                )}
-                {canManage('ข่าวสารและกิจกรรม') && (
-                  <a href="/admin/content?tab=news" className="block px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2">
-                    <Newspaper className="w-3.5 h-3.5 text-amber-400" /> กิจกรรมและประชาสัมพันธ์
-                  </a>
-                )}
-                {canManage('สื่อและสารคดีธรรมชาติ') && (
-                  <a href="/admin/content?tab=media" className="block px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2">
-                    <Film className="w-3.5 h-3.5 text-amber-400" /> สื่อและสารคดีธรรมชาติ
-                  </a>
-                )}
-                {canManage('คลังเอกสารและวารสาร') && (
-                  <a href="/admin/content?tab=publications" className="block px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2">
-                    <BookOpen className="w-3.5 h-3.5 text-amber-400" /> คลังเอกสารและวารสาร
-                  </a>
-                )}
-                {canManage('โครงสร้างคณะกรรมการ') && (
-                  <a href="/admin/committee" className="block px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-amber-400" /> จัดการโครงสร้างคณะกรรมการ
-                  </a>
-                )}
-                {isSuperAdmin && (
-                  <a href="/admin/content?tab=logs" className="block px-3 py-2 hover:bg-forest-900/40 text-gray-300 hover:text-white rounded-lg transition flex items-center gap-2">
-                    <History className="w-3.5 h-3.5 text-amber-400" /> ประวัติการทำงาน (Logs)
-                  </a>
-                )}
-              </div>
-            )}
+        {busy ? (
+          <TableSkeleton rows={4} columns={3} />
+        ) : recent.length === 0 ? (
+          <EmptyState
+            title="ยังไม่มีเนื้อหาในระบบ"
+            description="เริ่มต้นด้วยการเพิ่มข่าวหรืออัปโหลดเอกสารฉบับแรก"
+          />
+        ) : (
+          <ul className="divide-y divide-gray-50">
+            {recent.map((item) => (
+              <li key={`${item.category}-${item.id}`}>
+                <Link href={`/admin/content?tab=${item.category}`} className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-gray-50/70 transition">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm truncate">{item.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{CATEGORY_LABEL[item.category] ?? item.category}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{relativeTime(item.published_at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {allowed.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+          <h2 className="font-bold text-gray-900">ทางลัด</h2>
+          <div className="flex flex-wrap gap-2">
+            {allowed.map((category) => (
+              <Link
+                key={category.key}
+                href={`${category.href}&new=1`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-forest-700 hover:bg-forest-800 text-white rounded-xl text-sm font-medium transition"
+              >
+                <Plus className="w-4 h-4" /> เพิ่ม{category.label}
+              </Link>
+            ))}
           </div>
-
-          {isSuperAdmin && <a href="/admin/sub-admins" className="block px-4 py-2.5 hover:bg-forest-900/50 rounded-xl text-gray-300">จัดการสิทธิ์ Sub-Admin</a>}
-          <a href="/admin/change-password" className="block px-4 py-2.5 hover:bg-forest-900/50 rounded-xl text-gray-300">เปลี่ยนรหัสผ่าน</a>
-          {isSuperAdmin && <a href="/admin/settings" className="block px-4 py-2.5 hover:bg-forest-900/50 rounded-xl text-gray-300">ตั้งค่าธีมสีและไว้อาลัย</a>}
-        </nav>
-        <div className="p-4 border-t border-forest-900">
-          <button onClick={handleLogout} className="w-full flex items-center gap-2 text-xs text-red-400 hover:text-red-300 px-4 py-2 bg-red-950/30 rounded-xl transition">
-            <LogOut className="w-4 h-4" /> ออกจากระบบ
-          </button>
         </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-8 space-y-8 overflow-y-auto">
-        <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">ยินดีต้อนรับ {isSuperAdmin ? 'Super Admin' : 'Sub-Admin'}</h1>
-            <p className="text-sm text-gray-500">{isSuperAdmin ? 'จัดการเนื้อหา กำหนดสิทธิ์ และควบคุมการแสดงผลเว็บไซต์' : 'จัดการเนื้อหาตามสิทธิ์ที่ได้รับ และเปลี่ยนรหัสผ่านบัญชีของคุณ'}</p>
-          </div>
-          <span className={`text-xs px-3 py-1 rounded-full font-bold ${isSuperAdmin ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-            {username || (isSuperAdmin ? 'Super Admin' : 'Sub-Admin')} ({isSuperAdmin ? 'Super Admin' : 'Sub-Admin'})
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* การ์ดจัดการประวัติความเป็นมา */}
-          {canManage('ประวัติความเป็นมา') && (
-            <button
-              type="button"
-              onClick={() => setIsHistoryModalOpen(true)}
-              className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 transition text-left space-y-2 block w-full"
-            >
-              <Landmark className="w-8 h-8 text-forest-700" />
-              <h3 className="font-bold text-gray-900">จัดการประวัติความเป็นมา</h3>
-              <p className="text-xs text-gray-500">แก้ไขเนื้อหาและรูปภาพหน้า /about/history</p>
-            </button>
-          )}
-
-          {canManage('ข่าวสารและกิจกรรม') && (
-            <a href="/admin/content?tab=news" className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 transition block space-y-2">
-              <FileText className="w-8 h-8 text-forest-700" />
-              <h3 className="font-bold text-gray-900">จัดการเนื้อหาและข่าวสาร</h3>
-              <p className="text-xs text-gray-500">เพิ่ม ลบ หรือแก้ไขบทความและคลังเอกสาร</p>
-            </a>
-          )}
-
-          {isSuperAdmin && (
-            <a href="/admin/sub-admins" className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 transition block space-y-2">
-              <Users className="w-8 h-8 text-blue-700" />
-              <h3 className="font-bold text-gray-900">จัดการสิทธิ์ Sub-Admin</h3>
-              <p className="text-xs text-gray-500">ควบคุมสิทธิ์การเข้าถึงรายบุคคล</p>
-            </a>
-          )}
-
-          {isSuperAdmin && (
-            <a href="/admin/settings" className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 transition block space-y-2">
-              <Settings className="w-8 h-8 text-amber-700" />
-              <h3 className="font-bold text-gray-900">ตั้งค่าธีมสีและโหมดไว้อาลัย</h3>
-              <p className="text-xs text-gray-500">เปิด-ปิด โหมดสีขาวดำ (Grayscale)</p>
-            </a>
-          )}
-
-          <a href="/admin/change-password" className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:border-forest-500 transition block space-y-2">
-            <KeyRound className="w-8 h-8 text-forest-700" />
-            <h3 className="font-bold text-gray-900">เปลี่ยนรหัสผ่าน</h3>
-            <p className="text-xs text-gray-500">เปลี่ยนรหัสผ่านของบัญชีที่กำลังใช้งาน</p>
-          </a>
-        </div>
-      </main>
-
-      {/* Modal หน้าต่างแก้ไขข้อมูลประวัติความเป็นมา */}
-      <HistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
-      />
-    </div>
+      )}
+    </AdminShell>
   );
 }

@@ -17,8 +17,8 @@ type Publication = {
   event_date?: string | Date | null;
 };
 
-export default async function PublicationReaderPage({ params }: { params: { id: string } }) {
-  const id = Number(params.id);
+export default async function PublicationReaderPage({ params }: { params: Promise<{ id: string }> }) {
+  const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id < 1) notFound();
 
   let publication: Publication | undefined;

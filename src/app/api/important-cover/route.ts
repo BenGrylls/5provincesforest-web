@@ -18,11 +18,11 @@ export async function POST(request: Request) {
   let ornamentPath = typeof form.get('existingOrnament') === 'string' ? String(form.get('existingOrnament')) : '';
   if (image instanceof File && image.size > 0) {
     if (!isImage(image)) return NextResponse.json({ error: 'รูปภาพต้องเป็น JPG, PNG หรือ WebP' }, { status: 400 });
-    imagePath = await saveUpload(image);
+    imagePath = await saveUpload(image, 'cover');
   }
   if (ornament instanceof File && ornament.size > 0) {
     if (!isImage(ornament)) return NextResponse.json({ error: 'ลวดลายต้องเป็น JPG, PNG หรือ WebP' }, { status: 400 });
-    ornamentPath = await saveUpload(ornament);
+    ornamentPath = await saveUpload(ornament, 'cover');
   }
   const enabled = form.get('enabled') === 'true';
   const title = String(form.get('title') || '').trim();
