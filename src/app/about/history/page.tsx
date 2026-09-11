@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { readFile } from "fs/promises";
-import path from "path";
+import { query } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 interface HistoryImageItem {
   id: string;
@@ -25,16 +26,20 @@ async function getHistoryData(): Promise<HistoryData> {
     images: [],
   };
 
+  // เดิมอ่านจาก src/data/history.json ตรงๆ ตอนนี้ย้ายมาเก็บใน PostgreSQL แล้ว
   try {
-    const filePath = path.join(process.cwd(), "src", "data", "history.json");
-    const file = await readFile(filePath, "utf8");
-    const parsed = JSON.parse(file);
+    const result = await query(
+      "SELECT title, subtitle, cover_image, content, images FROM history_page WHERE id = $1",
+      ["global"],
+    );
+    const row = result.rows[0];
+    if (!row) return fallbackData;
     return {
-      title: parsed.title || "",
-      subtitle: parsed.subtitle || "",
-      coverImage: parsed.coverImage || "",
-      content: parsed.content || "",
-      images: Array.isArray(parsed.images) ? parsed.images : [],
+      title: row.title || "",
+      subtitle: row.subtitle || "",
+      coverImage: row.cover_image || "",
+      content: row.content || "",
+      images: Array.isArray(row.images) ? row.images : [],
     };
   } catch {
     return fallbackData;

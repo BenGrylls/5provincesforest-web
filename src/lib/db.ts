@@ -1,3 +1,5 @@
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { Pool } from 'pg';
 
 const pool = new Pool({
@@ -96,6 +98,16 @@ export async function initDB() {
     ALTER TABLE committee_profiles ADD COLUMN IF NOT EXISTS image_mime TEXT DEFAULT '';
     ALTER TABLE committee_profiles ADD COLUMN IF NOT EXISTS biography_sections JSONB DEFAULT '[]'::JSONB;
 
+    CREATE TABLE IF NOT EXISTS history_page (
+      id TEXT PRIMARY KEY DEFAULT 'global',
+      title TEXT DEFAULT '',
+      subtitle TEXT DEFAULT '',
+      cover_image TEXT DEFAULT '',
+      content TEXT DEFAULT '',
+      images JSONB DEFAULT '[]'::JSONB,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS objectives (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -135,4 +147,53 @@ export async function initDB() {
       ('ฝ่ายสวัสดิการ', 7), ('ฝ่ายตรวจสอบและประเมินผล', 8), ('ฝ่ายกฎหมาย', 9), ('ฝ่ายงบประมาณ', 10)
     ON CONFLICT (sort_order) DO NOTHING;
   `);
+
+  await migrateHistoryFromFile();
+}
+
+const HISTORY_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'history.json');
+
+const HISTORY_DEFAULTS = {
+  title: 'ประวัติความเป็นมา มูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด',
+  subtitle: 'โครงการอนุรักษ์ทรัพยากรป่าไม้และสัตว์ป่า ในพื้นที่รอยต่อ ๕ จังหวัดภาคตะวันออก',
+  coverImage: '',
+  content: '',
+  images: [] as unknown[],
+};
+
+/**
+ * ย้ายข้อมูลหน้าประวัติจาก src/data/history.json มาเก็บใน PostgreSQL
+ *
+ * เดิมแอปเขียนทับไฟล์ JSON นั้นตอน runtime ทั้งที่ไฟล์ถูก track ใน git ผลคือ
+ * ทุกครั้งที่แอดมินกดบันทึกจะมีไฟล์เปลี่ยนค้างใน git status สองคนแก้พร้อมกันก็ conflict
+ * และตอน deploy ถ้า pull ทับ ข้อมูลที่แอดมินแก้ไว้จะหายไปเลย
+ *
+ * ทำงานครั้งเดียวตอนตารางยังว่าง ถ้ามีข้อมูลอยู่แล้วจะไม่แตะต้อง
+ * ไฟล์ JSON เดิมถูกเก็บไว้เป็นต้นทางของการย้ายเท่านั้น หลัง deploy และยืนยันว่า
+ * ข้อมูลขึ้นครบแล้ว ลบไฟล์นั้นทิ้งได้
+ */
+async function migrateHistoryFromFile() {
+  const existing = await pool.query('SELECT 1 FROM history_page WHERE id = $1', ['global']);
+  if (existing.rows.length > 0) return;
+
+  let data = { ...HISTORY_DEFAULTS };
+  try {
+    const parsed = JSON.parse(await readFile(HISTORY_FILE_PATH, 'utf8'));
+    data = {
+      title: typeof parsed.title === 'string' ? parsed.title : '',
+      subtitle: typeof parsed.subtitle === 'string' ? parsed.subtitle : '',
+      coverImage: typeof parsed.coverImage === 'string' ? parsed.coverImage : '',
+      content: typeof parsed.content === 'string' ? parsed.content : '',
+      images: Array.isArray(parsed.images) ? parsed.images : [],
+    };
+  } catch {
+    // ไม่มีไฟล์เดิม (ติดตั้งใหม่) — ใช้ค่าตั้งต้น
+  }
+
+  await pool.query(
+    `INSERT INTO history_page (id, title, subtitle, cover_image, content, images)
+     VALUES ('global', $1, $2, $3, $4, $5)
+     ON CONFLICT (id) DO NOTHING`,
+    [data.title, data.subtitle, data.coverImage, data.content, JSON.stringify(data.images)],
+  );
 }

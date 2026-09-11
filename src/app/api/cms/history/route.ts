@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { query } from "@/lib/db";
 import { canManageHistory, isAuthenticated } from "@/lib/auth";
 
 export interface HistoryImageItem {
@@ -18,28 +17,45 @@ export interface HistoryData {
   updatedAt?: string;
 }
 
-const DATA_FILE_PATH = path.join(process.cwd(), "src", "data", "history.json");
-
-const defaultData: HistoryData = {
-  title: "ประวัติความเป็นมา มูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด",
-  subtitle: "โครงการอนุรักษ์ทรัพยากรป่าไม้และสัตว์ป่า ในพื้นที่รอยต่อ ๕ จังหวัดภาคตะวันออก",
+const FALLBACK: HistoryData = {
+  title: "",
+  subtitle: "",
   coverImage: "",
   content: "",
   images: [],
-  updatedAt: new Date().toISOString(),
 };
 
-async function getSavedHistory(): Promise<HistoryData> {
+/** เก็บเฉพาะฟิลด์ที่รู้จัก ไม่ปล่อยให้ payload แปลกปลอมหลุดลง JSONB */
+function cleanImages(value: unknown): HistoryImageItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      id: typeof item.id === "string" ? item.id : "",
+      url: typeof item.url === "string" ? item.url : "",
+      caption: typeof item.caption === "string" ? item.caption : "",
+    }))
+    .filter((item) => item.url);
+}
+
+export async function getSavedHistory(): Promise<HistoryData> {
   try {
-    const file = await readFile(DATA_FILE_PATH, "utf8");
-    const parsed = JSON.parse(file);
+    const result = await query(
+      "SELECT title, subtitle, cover_image, content, images, updated_at FROM history_page WHERE id = $1",
+      ["global"],
+    );
+    const row = result.rows[0];
+    if (!row) return FALLBACK;
     return {
-      ...defaultData,
-      ...parsed,
-      images: Array.isArray(parsed.images) ? parsed.images : [],
+      title: row.title || "",
+      subtitle: row.subtitle || "",
+      coverImage: row.cover_image || "",
+      content: row.content || "",
+      images: Array.isArray(row.images) ? row.images : [],
+      updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
     };
   } catch {
-    return defaultData;
+    return FALLBACK;
   }
 }
 
@@ -63,23 +79,39 @@ export async function PUT(req: NextRequest) {
     const body: HistoryData = await req.json();
 
     // บันทึกข้อมูลตามที่ส่งมา (ฟิลด์ไหนเว้นว่างไว้ก็บันทึกเป็นค่าว่างได้)
-    const updatedData: HistoryData = {
-      title: body.title?.trim() || "",
-      subtitle: body.subtitle?.trim() || "",
-      coverImage: body.coverImage?.trim() || "",
-      content: body.content?.trim() || "",
-      images: Array.isArray(body.images) ? body.images : [],
-      updatedAt: new Date().toISOString(),
-    };
+    const images = cleanImages(body.images);
+    const result = await query(
+      `INSERT INTO history_page (id, title, subtitle, cover_image, content, images, updated_at)
+       VALUES ('global', $1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (id) DO UPDATE SET
+         title = EXCLUDED.title,
+         subtitle = EXCLUDED.subtitle,
+         cover_image = EXCLUDED.cover_image,
+         content = EXCLUDED.content,
+         images = EXCLUDED.images,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING title, subtitle, cover_image, content, images, updated_at`,
+      [
+        body.title?.trim() || "",
+        body.subtitle?.trim() || "",
+        body.coverImage?.trim() || "",
+        body.content?.trim() || "",
+        JSON.stringify(images),
+      ],
+    );
 
-    const dataDir = path.dirname(DATA_FILE_PATH);
-    await mkdir(dataDir, { recursive: true });
-    await writeFile(DATA_FILE_PATH, JSON.stringify(updatedData, null, 2), "utf8");
-
+    const row = result.rows[0];
     return NextResponse.json({
       success: true,
       message: "บันทึกข้อมูลประวัติความเป็นมาเรียบร้อยแล้ว",
-      data: updatedData,
+      data: {
+        title: row.title,
+        subtitle: row.subtitle,
+        coverImage: row.cover_image,
+        content: row.content,
+        images: row.images,
+        updatedAt: new Date(row.updated_at).toISOString(),
+      },
     });
   } catch (error) {
     console.error("Save error:", error);
