@@ -1,31 +1,123 @@
-import React from 'react';
-import { History } from 'lucide-react';
-import AccessibilityBar from '@/components/AccessibilityBar';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import Link from "next/link";
+import { readFile } from "fs/promises";
+import path from "path";
 
-export default function HistoryPage() {
+interface HistoryImageItem {
+  id: string;
+  url: string;
+  caption?: string;
+}
+
+interface HistoryData {
+  title?: string;
+  subtitle?: string;
+  coverImage?: string;
+  content?: string;
+  images?: HistoryImageItem[];
+}
+
+async function getHistoryData(): Promise<HistoryData> {
+  const fallbackData: HistoryData = {
+    title: "ประวัติความเป็นมา มูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด",
+    subtitle: "",
+    coverImage: "",
+    content: "",
+    images: [],
+  };
+
+  try {
+    const filePath = path.join(process.cwd(), "src", "data", "history.json");
+    const file = await readFile(filePath, "utf8");
+    const parsed = JSON.parse(file);
+    return {
+      title: parsed.title || "",
+      subtitle: parsed.subtitle || "",
+      coverImage: parsed.coverImage || "",
+      content: parsed.content || "",
+      images: Array.isArray(parsed.images) ? parsed.images : [],
+    };
+  } catch {
+    return fallbackData;
+  }
+}
+
+export default async function HistoryPage() {
+  const data = await getHistoryData();
+
+  const hasHeader = Boolean(data.title?.trim() || data.subtitle?.trim());
+  const hasCover = Boolean(data.coverImage?.trim());
+  const hasTextContent = Boolean(data.content?.trim());
+  const hasImages = Boolean(data.images && data.images.length > 0);
+
   return (
-    <div className="min-h-screen flex flex-col bg-earth-100">
-      <AccessibilityBar />
-      <Navbar />
-      <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
-        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">ประวัติความเป็นมา</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">จุดเริ่มต้นของการพิทักษ์ผืนป่ารอยต่อ ๕ จังหวัด</p>
+    <main className="min-h-screen bg-slate-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* Breadcrumb Navigation */}
+        <nav className="flex items-center text-xs text-slate-500 gap-2">
+          <Link href="/" className="hover:text-forest-700 transition">หน้าหลัก</Link>
+          <span>/</span>
+          <span className="text-slate-700 font-medium">{data.title || "ประวัติความเป็นมา"}</span>
+        </nav>
+
+        {/* Header: ถ้าไม่มีทั้ง title และ subtitle จะไม่แสดงกล่องนี้ */}
+        {hasHeader && (
+          <div className="text-center space-y-2 pb-2">
+            {data.title && (
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 leading-tight">
+                {data.title}
+              </h1>
+            )}
+            {data.subtitle && (
+              <p className="text-base sm:text-lg text-forest-800 font-medium">{data.subtitle}</p>
+            )}
+          </div>
+        )}
+
+        {/* รูปภาพหน้าปกหัวเรื่อง: แสดงเฉพาะเมื่อมีรูป */}
+        {hasCover && (
+          <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={data.coverImage}
+              alt={data.title || "ประวัติความเป็นมา"}
+              className="w-full max-h-[500px] object-contain mx-auto"
+            />
+          </div>
+        )}
+
+        {/* เนื้อหาข้อความ: แสดงเฉพาะเมื่อมีข้อความ */}
+        {hasTextContent && (
+          <article className="bg-white p-6 sm:p-10 rounded-2xl border border-slate-200/80 shadow-sm text-slate-800 text-base sm:text-lg leading-relaxed whitespace-pre-line text-justify">
+            {data.content}
+          </article>
+        )}
+
+        {/* รูปภาพเนื้อหา: แสดงเรียงต่อกันลงมาในแนวตั้งแบบแนบเนียน */}
+        {hasImages && (
+          <section className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden divide-y divide-slate-100">
+            {data.images?.map((item, index) => (
+              <figure key={item.id || index} className="p-2 sm:p-4 flex flex-col items-center">
+                <div className="w-full flex justify-center bg-slate-50 rounded-xl overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.url}
+                    alt={item.caption || `รูปภาพเนื้อหาที่ ${index + 1}`}
+                    className="w-full h-auto max-w-full object-contain mx-auto block"
+                    loading="lazy"
+                  />
+                </div>
+                {item.caption && (
+                  <figcaption className="text-center text-xs sm:text-sm text-slate-600 font-medium pt-2 pb-1 px-4">
+                    {item.caption}
+                  </figcaption>
+                )}
+              </figure>
+            ))}
+          </section>
+        )}
+
       </div>
-      <main className="max-w-4xl mx-auto px-4 py-16 flex-1 w-full">
-        <section className="bg-white p-8 md:p-12 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-3 border-b border-gray-100 pb-4 mb-6">
-            <div className="p-3 bg-forest-50 rounded-xl"><History className="w-6 h-6 text-forest-700" /></div>
-            <h2 className="text-2xl font-bold text-forest-950">กำเนิดมูลนิธิฯ</h2>
-          </div>
-          <div className="prose prose-earth font-serif leading-relaxed text-earth-800 space-y-4">
-            <p>ป่ารอยต่อ ๕ จังหวัด (ฉะเชิงเทรา ชลบุรี ระยอง จันทบุรี สระแก้ว) เป็นผืนป่าที่ราบต่ำที่อุดมสมบูรณ์ที่สุดแห่งสุดท้ายในภาคตะวันออก แต่ในอดีตประสบปัญหาการบุกรุกพื้นที่ป่าและการลักลอบล่าสัตว์อย่างหนัก</p>
-            <p>ด้วยสำนึกในพระมหากรุณาธิคุณของสมเด็จพระนางเจ้าสิริกิติ์ พระบรมราชินีนาถ พระบรมราชชนนีพันปีหลวง ที่ทรงห่วงใยทรัพยากรธรรมชาติ หน่วยงานภาครัฐ กองทัพบก และภาคประชาชน จึงได้ร่วมกันจัดตั้ง <strong>"มูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด"</strong> ขึ้น เพื่อเป็นองค์กรกลางในการระดมทุน บูรณาการการทำงาน และช่วยเหลือฟื้นฟูสภาพป่า</p>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
+    </main>
   );
 }
