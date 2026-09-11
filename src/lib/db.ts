@@ -96,6 +96,14 @@ export async function initDB() {
     ALTER TABLE committee_profiles ADD COLUMN IF NOT EXISTS image_mime TEXT DEFAULT '';
     ALTER TABLE committee_profiles ADD COLUMN IF NOT EXISTS biography_sections JSONB DEFAULT '[]'::JSONB;
 
+    CREATE TABLE IF NOT EXISTS objectives (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      icon TEXT DEFAULT 'leaf',
+      sort_order INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS committee_units (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
@@ -111,6 +119,14 @@ export async function initDB() {
     INSERT INTO committee_profiles (id, name, position, biography, responsibilities)
     VALUES ('president', 'พลเอก นามสมมติ นามสกุล', 'ประธานกรรมการมูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด', 'ดำรงตำแหน่งประธานกรรมการมูลนิธิอนุรักษ์ป่ารอยต่อ ๕ จังหวัด มีบทบาทสำคัญในการขับเคลื่อนนโยบายอนุรักษ์ทรัพยากรธรรมชาติป่าไม้และสัตว์ป่าในพื้นที่ภาคตะวันออก', 'กำกับทิศทางและนโยบายการอนุรักษ์ทรัพยากรธรรมชาติในพื้นที่รอยต่อ ๕ จังหวัด')
     ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO objectives (title, description, icon, sort_order)
+    SELECT * FROM (VALUES
+      ('๑. ฟื้นฟูและอนุรักษ์ผืนป่า', 'ส่งเสริมการปลูกป่า สร้างฝายชะลอน้ำ และปกป้องพื้นที่ป่าไม้จากการถูกทำลาย', 'leaf', 1),
+      ('๒. อนุรักษ์สัตว์ป่า', 'จัดทำโป่งเทียม แหล่งน้ำ และแก้ปัญหาความขัดแย้งระหว่างคนกับช้างป่าอย่างสันติวิธี', 'shield', 2),
+      ('๓. พัฒนาคุณภาพชีวิตราษฎร', 'สนับสนุนอาชีพ ให้ทุนการศึกษา และสร้างแนวกันชนเพื่อให้ชุมชนพึ่งพาตนเองได้โดยไม่บุกรุกป่า', 'target', 3)
+    ) AS seed(title, description, icon, sort_order)
+    WHERE NOT EXISTS (SELECT 1 FROM objectives);
 
     INSERT INTO committee_units (title, sort_order)
     VALUES

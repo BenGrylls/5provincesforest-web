@@ -22,6 +22,7 @@ type Props = {
 const PATH_TO_KEY: Record<string, string> = {
   '/admin': 'overview',
   '/admin/history': 'history',
+  '/admin/objectives': 'objectives',
   '/admin/committee': 'committee',
   '/admin/committee/president-bio': 'committee',
   '/admin/sub-admins': 'sub-admins',

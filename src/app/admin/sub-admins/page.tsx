@@ -4,6 +4,7 @@ import { UserPlus, Users, X } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/admin/States';
 import { toast } from '@/components/admin/toast';
+import { PERMISSIONS } from '@/lib/permissions';
 
 type SubAdmin = {
   id: number;
@@ -12,7 +13,8 @@ type SubAdmin = {
   permissions: string[];
 };
 
-const ALL_PERMISSIONS = ['ข่าวสารและกิจกรรม', 'สื่อและสารคดีธรรมชาติ', 'คลังเอกสารและวารสาร', 'โครงสร้างคณะกรรมการ'];
+// เดิม hardcode ไว้ที่นี่และตกหล่น 'ประวัติความเป็นมา' ทำให้มอบสิทธิ์นั้นไม่ได้เลย
+const ALL_PERMISSIONS = PERMISSIONS;
 
 export default function SubAdminPage() {
   const [admins, setAdmins] = useState<SubAdmin[]>([]);

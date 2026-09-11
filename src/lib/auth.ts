@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto';
 import { verifyPassword } from './security';
 import { verifySessionToken } from './session.js';
 import { query } from './db';
+import { PERMISSIONS } from './permissions';
 
 const SESSION_COOKIE = 'admin_token';
 
@@ -120,7 +121,10 @@ export async function getAdminSession(request: Request) {
 
   const { username, role } = verified;
   if (role !== 'sub_admin') {
-    return { role: 'super_admin' as const, username, permissions: Object.values(CATEGORY_PERMISSIONS) };
+    // เดิมคืนแค่ 3 หมวดเนื้อหา ทำให้ session ของ super admin ดูเหมือนไม่มีสิทธิ์
+    // คณะกรรมการ/ประวัติ/วัตถุประสงค์ ทั้งที่เข้าถึงได้จริง (ฟังก์ชันตรวจสิทธิ์
+    // เช็ค role === 'super_admin' ก่อนอยู่แล้ว) คืนให้ครบเพื่อไม่ให้เข้าใจผิด
+    return { role: 'super_admin' as const, username, permissions: [...PERMISSIONS] };
   }
   const result = await query('SELECT permissions FROM sub_admins WHERE username = $1', [username]);
   return { role: 'sub_admin' as const, username, permissions: Array.isArray(result.rows[0]?.permissions) ? result.rows[0].permissions : [] };
@@ -148,4 +152,9 @@ export async function canManageCommittee(request: Request) {
 export async function canManageHistory(request: Request) {
   const session = await getAdminSession(request);
   return Boolean(session && (session.role === 'super_admin' || session.permissions.includes('ประวัติความเป็นมา')));
+}
+
+export async function canManageObjectives(request: Request) {
+  const session = await getAdminSession(request);
+  return Boolean(session && (session.role === 'super_admin' || session.permissions.includes('วัตถุประสงค์และภารกิจ')));
 }

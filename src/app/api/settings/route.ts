@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { isAuthenticated } from '@/lib/auth';
+import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,7 +16,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // เดิมขอแค่ "ล็อกอินแล้ว" ทำให้ sub-admin คนไหนก็สั่งเปิดโหมดขาวดำทั้งเว็บได้
+  // ทั้งที่หน้า /admin/settings สงวนไว้ให้ super admin เท่านั้น
+  // (src/proxy.ts กัน sub-admin ไว้แค่ระดับ UX ไม่ได้กันการยิง API ตรงๆ)
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await isSuperAdminRequest(request)) return NextResponse.json({ error: 'ไม่มีสิทธิ์แก้ไขการตั้งค่าเว็บไซต์' }, { status: 403 });
   try {
     const body = await request.json();
     await query(

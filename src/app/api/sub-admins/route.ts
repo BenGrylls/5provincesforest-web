@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { hashPassword } from '@/lib/security';
+import { isPermission } from '@/lib/permissions';
+
+/** กรองเฉพาะสิทธิ์ที่มีอยู่จริง เดิมรับ string อะไรก็ได้ พิมพ์ผิดก็บันทึกลงฐานข้อมูลแล้วไม่มีผลอะไร */
+function cleanPermissions(value: unknown) {
+  return Array.isArray(value) ? Array.from(new Set(value.filter(isPermission))) : [];
+}
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,7 +24,7 @@ export async function POST(request: Request) {
   try {
     const result = await query(
       'INSERT INTO sub_admins (name, username, password_hash, permissions) VALUES ($1, $2, $3, $4) RETURNING id, name, username, permissions',
-      [name.trim(), username.trim(), await hashPassword(password), Array.isArray(permissions) ? permissions : []],
+      [name.trim(), username.trim(), await hashPassword(password), cleanPermissions(permissions)],
     );
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch {
@@ -29,12 +35,12 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id, permissions } = await request.json();
-  if (!Number.isSafeInteger(id) || !Array.isArray(permissions) || !permissions.every((permission) => typeof permission === 'string')) {
+  if (!Number.isSafeInteger(id) || !Array.isArray(permissions)) {
     return NextResponse.json({ error: 'ข้อมูลสิทธิ์ไม่ถูกต้อง' }, { status: 400 });
   }
   const result = await query(
     'UPDATE sub_admins SET permissions = $1 WHERE id = $2 RETURNING id, name, username, permissions',
-    [permissions, id],
+    [cleanPermissions(permissions), id],
   );
   if (!result.rows[0]) return NextResponse.json({ error: 'ไม่พบบัญชี Sub-Admin' }, { status: 404 });
   return NextResponse.json(result.rows[0]);

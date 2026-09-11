@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Newspaper,
   Settings,
+  Target,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'จัดการเนื้อหาเว็บไซต์',
     items: [
       { key: 'history', label: 'ประวัติความเป็นมา', icon: Landmark, href: '/admin/history', permission: 'ประวัติความเป็นมา' },
+      { key: 'objectives', label: 'วัตถุประสงค์และภารกิจ', icon: Target, href: '/admin/objectives', permission: 'วัตถุประสงค์และภารกิจ' },
       { key: 'news', label: 'กิจกรรมและประชาสัมพันธ์', icon: Newspaper, href: '/admin/content?tab=news', permission: 'ข่าวสารและกิจกรรม' },
       { key: 'media', label: 'สื่อและสารคดีธรรมชาติ', icon: Film, href: '/admin/content?tab=media', permission: 'สื่อและสารคดีธรรมชาติ' },
       { key: 'publications', label: 'คลังเอกสารและวารสาร', icon: BookOpen, href: '/admin/content?tab=publications', permission: 'คลังเอกสารและวารสาร' },
