@@ -1,5 +1,21 @@
+# dependencies
 node_modules/
+
+# next.js
 .next/
+next-env.d.ts.bak
+
+# ตัวแปรลับ — ห้าม commit เด็ดขาด
 .env
 .env.local
+
+# ไฟล์ที่ผู้ดูแลระบบอัปโหลดผ่านหน้าเว็บ (ไม่ใช่ซอร์สโค้ด)
 public/uploads/
+
+# แคชและไฟล์ที่เครื่องมือสร้างขึ้นเอง
+*.tsbuildinfo
+*.log
+
+# ไฟล์ขยะของระบบปฏิบัติการ
+.DS_Store
+Thumbs.db
