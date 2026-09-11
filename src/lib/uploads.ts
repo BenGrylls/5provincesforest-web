@@ -11,6 +11,16 @@ const EXTENSIONS: Record<string, string> = {
   'application/pdf': '.pdf',
 };
 
+// เดิมไม่มีการจำกัดขนาดไฟล์เลย ใครก็อัปโหลดไฟล์ใหญ่แค่ไหนก็ได้ (เสี่ยงถม disk เต็ม)
+const MAX_FILE_SIZE_BYTES: Record<string, number> = {
+  'image/jpeg': 10 * 1024 * 1024, // 10 MB
+  'image/png': 10 * 1024 * 1024,
+  'image/webp': 10 * 1024 * 1024,
+  'video/mp4': 200 * 1024 * 1024, // 200 MB
+  'video/webm': 200 * 1024 * 1024,
+  'application/pdf': 30 * 1024 * 1024, // 30 MB
+};
+
 export function isImage(file: File) {
   return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
 }
@@ -27,6 +37,10 @@ export async function saveUpload(file: File) {
   const extension = EXTENSIONS[file.type];
   if (!extension || file.size === 0) {
     throw new Error('รองรับเฉพาะไฟล์ JPG, PNG, WebP, MP4, WebM หรือ PDF และไฟล์ต้องไม่ว่างเปล่า');
+  }
+  const maxSize = MAX_FILE_SIZE_BYTES[file.type];
+  if (maxSize && file.size > maxSize) {
+    throw new Error(`ไฟล์มีขนาดใหญ่เกินไป (สูงสุด ${Math.round(maxSize / 1024 / 1024)} MB)`);
   }
 
   const uploadDir = path.join(process.cwd(), 'public', 'uploads');

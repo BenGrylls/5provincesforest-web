@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { canAccessCategory, ContentCategory, isAuthenticated } from '@/lib/auth';
+import { canAccessCategory, ContentCategory, getAdminSession, isAuthenticated } from '@/lib/auth';
 import { isImage, isVideo, isPdf, saveUpload } from '@/lib/uploads';
 
 export async function GET(request: Request) {
@@ -44,7 +44,9 @@ export async function POST(request: Request) {
     const episodeValue = Number.parseInt(field('episodeNumber'), 10);
     const episodeNumber = Number.isInteger(episodeValue) && episodeValue > 0 ? episodeValue : null;
     
-    const adminUser = 'BorderForest';
+    // เดิม hardcode เป็น 'BorderForest' เสมอ ทำให้ log ผิดคนเมื่อ sub-admin เป็นคนแก้ไขจริง
+    const session = await getAdminSession(request);
+    const adminUser = session?.username || 'unknown';
     const activeEventDate = eventDate || new Date().toISOString().split('T')[0];
     const existingImages = field('existingImages') || field('imagePaths');
     const pathsArray = existingImages.split(',').map((path) => path.trim())
@@ -120,7 +122,8 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const adminUser = 'BorderForest';
+    const session = await getAdminSession(request);
+    const adminUser = session?.username || 'unknown';
 
     if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
 

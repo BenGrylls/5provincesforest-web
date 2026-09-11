@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import { verifyPassword } from './security';
+import { verifySessionToken } from './session.js';
 import { query } from './db';
 
 const SESSION_COOKIE = 'admin_token';
@@ -58,24 +59,21 @@ export async function isValidLogin(username: unknown, password: unknown) {
 }
 
 /**
- * Check if request has valid authentication token
+ * Check if request has valid authentication token.
  * Uses the standard Cookie header, supported by all route handler requests.
+ *
+ * ตรวจลายเซ็น (HMAC) ของ token แทนการเทียบกับ ADMIN_SESSION_TOKEN ตรงๆ
+ * เพราะตอนนี้ token ถูกออกใหม่ทุกครั้งที่ login (ไม่ใช่ค่าคงที่ตัวเดียวที่ทุกคนใช้ร่วมกัน)
+ * ADMIN_SESSION_TOKEN ยังถูกใช้เป็น "secret" สำหรับเซ็น/ตรวจลายเซ็นอยู่เหมือนเดิม
+ * จึงไม่ต้องเพิ่ม environment variable ใหม่
  */
 export function isAuthenticated(request: Request) {
-  const sessionToken = process.env.ADMIN_SESSION_TOKEN;
-  
-  if (!configured(sessionToken)) {
+  if (!configured(process.env.ADMIN_SESSION_TOKEN)) {
     return false;
   }
 
-  const token = request.headers
-    .get('cookie')
-    ?.split(';')
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`))
-    ?.slice(`${SESSION_COOKIE}=`.length);
-
-  return token !== undefined && safelyMatches(token, sessionToken);
+  const token = readCookie(request, SESSION_COOKIE);
+  return token !== undefined && verifySessionToken(token) !== null;
 }
 
 /**
@@ -88,6 +86,7 @@ export function isAuthConfigured() {
 }
 
 export { SESSION_COOKIE };
+export { createSessionToken } from './session.js';
 export const ADMIN_ROLE_COOKIE = 'admin_role';
 export const ADMIN_USERNAME_COOKIE = 'admin_username';
 
@@ -108,15 +107,32 @@ function readCookie(request: Request, name: string) {
     ?.slice(name.length + 1);
 }
 
+/**
+ * คืนค่า session ของผู้ใช้ปัจจุบัน โดย username/role มาจาก "token ที่เซ็นแล้ว" เท่านั้น
+ * (ไม่ใช่จาก cookie admin_role/admin_username ธรรมดา ซึ่งฝั่ง client แก้ไขเองได้
+ * และเป็นช่องโหว่ privilege escalation เดิม — ดูคอมเมนต์ใน src/lib/session.js)
+ */
 export async function getAdminSession(request: Request) {
-  if (!isAuthenticated(request)) return null;
-  const role = readCookie(request, ADMIN_ROLE_COOKIE) || 'super_admin';
-  const username = readCookie(request, ADMIN_USERNAME_COOKIE) || process.env.ADMIN_USERNAME || '';
+  const token = readCookie(request, SESSION_COOKIE);
+  if (!token) return null;
+  const verified = verifySessionToken(token);
+  if (!verified) return null;
+
+  const { username, role } = verified;
   if (role !== 'sub_admin') {
     return { role: 'super_admin' as const, username, permissions: Object.values(CATEGORY_PERMISSIONS) };
   }
   const result = await query('SELECT permissions FROM sub_admins WHERE username = $1', [username]);
   return { role: 'sub_admin' as const, username, permissions: Array.isArray(result.rows[0]?.permissions) ? result.rows[0].permissions : [] };
+}
+
+/**
+ * ใช้แทนฟังก์ชัน isSuperAdmin ที่แต่ละ route เคยเขียนเองแยกกัน (sub-admins, logs,
+ * important-cover) ซึ่งอ่าน cookie admin_role ตรงๆ โดยไม่ตรวจลายเซ็น
+ */
+export async function isSuperAdminRequest(request: Request) {
+  const session = await getAdminSession(request);
+  return Boolean(session && session.role === 'super_admin');
 }
 
 export async function canAccessCategory(request: Request, category: ContentCategory) {

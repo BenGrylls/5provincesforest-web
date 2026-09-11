@@ -1,21 +1,16 @@
 import { NextResponse } from 'next/server';
-import { ADMIN_ROLE_COOKIE, isAuthenticated } from '@/lib/auth';
+import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { isImage, saveUpload } from '@/lib/uploads';
 
-function isSuperAdmin(request: Request) {
-  const role = request.headers.get('cookie')?.split(';').map((cookie) => cookie.trim()).find((cookie) => cookie.startsWith(`${ADMIN_ROLE_COOKIE}=`))?.slice(`${ADMIN_ROLE_COOKIE}=`.length);
-  return role === undefined || role === 'super_admin';
-}
-
 export async function GET(request: Request) {
-  if (!isAuthenticated(request) || !isSuperAdmin(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const result = await query('SELECT important_cover_enabled, important_cover_image, important_cover_title, important_cover_message, important_cover_link, important_cover_link_text, important_cover_subtitle, important_cover_date, important_cover_footer, important_cover_ornament, important_cover_title_size, important_cover_subtitle_size, important_cover_date_size, important_cover_footer_size FROM site_settings WHERE id = $1', ['global']);
   return NextResponse.json(result.rows[0] || {});
 }
 
 export async function POST(request: Request) {
-  if (!isAuthenticated(request) || !isSuperAdmin(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const form = await request.formData();
   const image = form.get('image');
   const ornament = form.get('ornament');
