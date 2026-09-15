@@ -35,7 +35,7 @@ export default async function PublicationsPage() {
       <Navbar />
       <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">คลังเอกสารและวารสาร</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">สืบค้นเอกสารวิชาการ วารสารมณีบูรพา และรายงานประจำปี</p>
+        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">สืบค้นเอกสารวิชาการ วารสารมณีบูรพา</p>
       </div>
       <main className="max-w-5xl mx-auto px-4 py-16 flex-1 w-full space-y-8">
         <PublicationList publications={publications} />

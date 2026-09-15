@@ -41,8 +41,8 @@ export default async function MediaPage() {
     <div className="min-h-screen flex flex-col bg-earth-100">
       <AccessibilityBar /><Navbar />
       <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
-        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">สื่อและสารคดีธรรมชาติ</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">คลังวิดีโอเพื่อการศึกษาและเรียนรู้วิถีชีวิตสัตว์ป่า</p>
+        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">สื่อและสารคดี</h1>
+        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">คลังวิดีโอเพื่อการศึกษาและเรียนรู้</p>
       </div>
       <main className="max-w-7xl mx-auto px-4 py-16 flex-1 w-full">
         <MediaList videos={videos} />

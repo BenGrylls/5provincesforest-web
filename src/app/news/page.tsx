@@ -33,7 +33,7 @@ export default async function NewsPage() {
       <Navbar />
       <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">กิจกรรมและประชาสัมพันธ์</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">ติดตามข่าวสาร กิจกรรม ภาพถ่ายกิจกรรมหลายรูป และคลิปวิดีโอ</p>
+        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">ติดตามข่าวสาร และกิจกรรมของมูลนิธิป่ารอยต่อ 5 จังหวัดภาคตะวันออก</p>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-16 flex-1 w-full space-y-5">

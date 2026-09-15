@@ -45,12 +45,12 @@ export default async function HomePage() {
   try {
     const [newsResult, mediaResult, publicationResult, settingsResult] = await Promise.all([
       query(
-      `SELECT id, title, content, event_date, image_paths
+        `SELECT id, title, content, event_date, image_paths
        FROM articles
        WHERE category = $1
        ORDER BY event_date DESC NULLS LAST, created_at DESC
        LIMIT 3`,
-      ['news']
+        ['news']
       ),
       query('SELECT id, title, content, image_paths, video_file, social_video_url FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT 4', ['media']),
       query('SELECT id, title, content, event_date, pdf_file FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT 3', ['publications']),
@@ -81,14 +81,14 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10 w-full">
           <div className="max-w-3xl space-y-6">
             <div className="inline-flex items-center gap-2 bg-black/30 border border-white/20 px-4 py-1.5 rounded-full text-amber-400 text-xs font-medium backdrop-blur-md">
-              <Leaf className="w-3.5 h-3.5" /> โครงการอันเนื่องมาจากพระราชดำริ
+              <Leaf className="w-3.5 h-3.5" />โครงการอันเนื่องมาจากพระราชดำริในสมเด็จพระนางเจ้าสิริกิติ์ พระบรมราชินีนาถ พระบรมราชชนนีพันปีหลวง
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-7xl font-bold leading-tight tracking-tight drop-shadow-lg">
               อนุรักษ์ผืนป่ารอยต่อ <br />
               <span className="text-emerald-400">๕ จังหวัด ภาคตะวันออก</span>
             </h1>
             <div className="pt-6 flex flex-wrap gap-4">
-              <Link href="/news" className="bg-amber-500 hover:bg-amber-600 text-forest-950 font-bold px-8 py-3.5 rounded-lg shadow-lg transition-all">ติดตามข่าวสารล่าสุด</Link>
+              <Link href="/news" className="bg-amber-500 hover:bg-amber-600 text-forest-950 font-bold px-8 py-3.5 rounded-lg shadow-lg transition-all">ติดตามข่าวสาร</Link>
               <Link href="/media" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white font-medium px-8 py-3.5 rounded-lg backdrop-blur-md transition-all border border-white/20"><PlayCircle className="w-5 h-5" /> ชมสารคดี</Link>
             </div>
           </div>
@@ -96,7 +96,7 @@ export default async function HomePage() {
       </section>
 
       <main id="main-content" className="max-w-7xl mx-auto px-4 md:px-8 py-16 space-y-24 flex-1">
-        
+
         {/* หัวข้อ: กิจกรรมและประชาสัมพันธ์ (คลิกไปหน้า /news) */}
         <section id="news" className="space-y-8">
           <div className="flex items-end justify-between border-b border-gray-200 pb-4">
@@ -114,25 +114,25 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {latestNews.map((item) => (
               <Link key={item.id} href={`/news/${item.id}`} className="group">
-              <article className="h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
-                <div className="aspect-[4/3] bg-earth-200 overflow-hidden">
-                  {Array.isArray(item.image_paths) && item.image_paths[0] && (
-                    <img src={item.image_paths[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                  )}
-                </div>
-                <div className="hidden">
-                  <div className="text-sm text-earth-500"><Calendar className="w-4 h-4 inline mr-1" /> 9 ก.ย. 2569</div>
-                  <h4 className="font-bold text-lg text-forest-950">คณะอนุกรรมการฝ่ายอนุรักษ์ทรัพยากรดินและน้ำ ตรวจความคืบหน้าฝายชะลอน้ำ</h4>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="text-sm text-earth-500">
-                    <Calendar className="w-4 h-4 inline mr-1" />
-                    {item.event_date ? new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                <article className="h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
+                  <div className="aspect-[4/3] bg-earth-200 overflow-hidden">
+                    {Array.isArray(item.image_paths) && item.image_paths[0] && (
+                      <img src={item.image_paths[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                    )}
                   </div>
-                  <h4 className="font-bold text-lg text-forest-950 group-hover:text-forest-700 transition line-clamp-2">{item.title}</h4>
-                  {item.content && <p className="text-sm text-earth-600 line-clamp-2">{item.content}</p>}
-                </div>
-              </article>
+                  <div className="hidden">
+                    <div className="text-sm text-earth-500"><Calendar className="w-4 h-4 inline mr-1" /> 9 ก.ย. 2569</div>
+                    <h4 className="font-bold text-lg text-forest-950">คณะอนุกรรมการฝ่ายอนุรักษ์ทรัพยากรดินและน้ำ ตรวจความคืบหน้าฝายชะลอน้ำ</h4>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="text-sm text-earth-500">
+                      <Calendar className="w-4 h-4 inline mr-1" />
+                      {item.event_date ? new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                    </div>
+                    <h4 className="font-bold text-lg text-forest-950 group-hover:text-forest-700 transition line-clamp-2">{item.title}</h4>
+                    {item.content && <p className="text-sm text-earth-600 line-clamp-2">{item.content}</p>}
+                  </div>
+                </article>
               </Link>
             ))}
             {latestNews.length === 0 && (
@@ -149,7 +149,7 @@ export default async function HomePage() {
             <div>
               <Link href="/media" className="group">
                 <h3 className="text-2xl font-bold text-white group-hover:text-amber-300 transition-colors inline-flex items-center gap-2">
-                  สื่อและสารคดีธรรมชาติ <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  สื่อและสารคดี<ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </h3>
               </Link>
             </div>

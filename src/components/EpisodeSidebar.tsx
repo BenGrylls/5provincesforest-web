@@ -26,8 +26,8 @@ export default function EpisodeSidebar({
 
   return (
     <>
-      {/* Mobile Dropdown */}
-      <div className="md:hidden mb-6">
+      {/* Mobile Dropdown — order-1 ให้ขึ้นก่อนวิดีโอตอนจอแคบ, md:order-none คืนค่าเดิมตอนจอปกติ (ไม่กระทบเดสก์ท็อป) */}
+      <div className="md:hidden mb-6 order-1 md:order-none">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="w-full flex items-center justify-between px-4 py-3 bg-forest-900 text-white rounded-xl transition"
@@ -59,8 +59,8 @@ export default function EpisodeSidebar({
         )}
       </div>
 
-      {/* Desktop Sidebar */}
-      <div className="hidden md:block md:col-span-1">
+      {/* Desktop Sidebar — md:order-none คืนลำดับปกติ (อยู่ขวามือ หลังวิดีโอ เหมือนเดิม) */}
+      <div className="hidden md:block md:col-span-1 md:order-none">
         <div className="sticky top-20 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 bg-forest-950 text-white border-b">
             <h3 className="font-bold text-sm">{seriesTitle}</h3>

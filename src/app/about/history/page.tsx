@@ -1,4 +1,7 @@
 import Link from "next/link";
+import AccessibilityBar from "@/components/AccessibilityBar";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +58,10 @@ export default async function HistoryPage() {
   const hasImages = Boolean(data.images && data.images.length > 0);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <AccessibilityBar />
+      <Navbar />
+      <main className="flex-1 py-8 sm:py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
         
         {/* Breadcrumb Navigation */}
@@ -123,6 +129,8 @@ export default async function HistoryPage() {
         )}
 
       </div>
-    </main>
+      </main>
+      <Footer />
+    </div>
   );
 }

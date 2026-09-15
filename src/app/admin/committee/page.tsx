@@ -225,7 +225,7 @@ export default function CommitteeManagementPage() {
                   <textarea value={unit.description} onChange={(event) => updateUnit(unit.id, { description: event.target.value })} placeholder="อธิบายภาพรวมของฝ่ายนี้" rows={2} className={inputClass} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-gray-600">ภารกิจ</label>
+                  <label className="block text-xs font-semibold text-gray-600">รายชื่อ</label>
                   <textarea
                     value={unit.responsibilities.join('\n')}
                     onChange={(event) => updateUnit(unit.id, { responsibilities: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) })}

@@ -102,7 +102,7 @@ export default async function NewsDetailPage({ params }: { params: Promise<{ id:
 
             {images.length > 0 && (
               <section>
-                <h2 className="text-xl font-bold text-forest-950 mb-4 flex items-center gap-2"><ImageIcon className="w-5 h-5" /> ภาพกิจกรรม ({images.length} ภาพ)</h2>
+                <h2 className="text-xl font-bold text-forest-950 mb-4 flex items-center gap-2"><ImageIcon className="w-5 h-5" /> ภาพกิจกรรม</h2>
                 <ActivityGallery images={images} title={article.title} />
               </section>
             )}

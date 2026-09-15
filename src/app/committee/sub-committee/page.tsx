@@ -18,8 +18,7 @@ export default async function SubCommitteePage() {
       <Navbar />
       <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">คณะอนุกรรมการเฉพาะด้าน</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">โครงสร้างการบริหารงาน ๑๐ ฝ่าย</p>
-      </div>
+<p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">โครงสร้างการบริหารงาน {subCommittees.length} ฝ่าย</p>      </div>
       <main className="max-w-5xl mx-auto px-4 py-16 flex-1 w-full">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {subCommittees.map((dept) => (

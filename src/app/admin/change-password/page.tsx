@@ -46,13 +46,13 @@ export default function ChangePasswordPage() {
     <AdminShell
       activeKey="change-password"
       title="เปลี่ยนรหัสผ่าน"
-      description="เปลี่ยนรหัสผ่านของบัญชีที่กำลังเข้าสู่ระบบอยู่"
+      description="เปลี่ยนรหัสผ่านของบัญชี"
     >
       <div className="max-w-md">
         <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-5 md:p-6 space-y-5">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
             <div className="p-3 bg-forest-50 rounded-xl text-forest-700 shrink-0"><KeyRound className="w-6 h-6" /></div>
-            <p className="text-sm text-gray-500">ตั้งรหัสผ่านที่ยาวอย่างน้อย 8 ตัวอักษร และไม่ซ้ำกับรหัสที่ใช้ที่อื่น</p>
+            <p className="text-sm text-gray-500">ตั้งรหัสผ่านที่ยาวอย่างน้อย 8 ตัวอักษร</p>
           </div>
 
           <form onSubmit={submit} className="space-y-4">

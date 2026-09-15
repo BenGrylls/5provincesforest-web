@@ -94,16 +94,16 @@ export default async function MediaDetailPage({ params }: { params: Promise<{ id
         </Link>
         
         <div className="grid md:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="md:col-span-2">
+          {/* Main Content — order-2 ให้ลงมาอยู่หลังเมนูอัลบั้มตอนจอแคบ, md:order-none คืนค่าเดิมตอนจอปกติ */}
+          <div className="md:col-span-2 order-2 md:order-none">
             <article className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-              <header className="p-6 md:p-10 bg-forest-950 text-white">
-                <h1 className="text-3xl md:text-5xl font-bold leading-tight">{media.title}</h1>
+              <header className="p-6 md:p-6 bg-forest-950 text-white">
+                <h1 className="text-3xl md:text-3xl font-bold leading-tight">{media.title}</h1>
                 {media.episode_number && (
-                  <p className="text-sm text-forest-300 mt-3">ตอนที่ {media.episode_number}</p>
+                  <p className="text-sm text-forest-300 mt-1">ตอนที่ {media.episode_number}</p>
                 )}
               </header>
-              <div className="p-6 md:p-10 space-y-8">
+              <div className="p-6 md:p-6 space-y-4">
                 <div className="aspect-video bg-black rounded-2xl overflow-hidden">
                   {media.video_file ? (
                     <video src={media.video_file} controls preload="metadata" className="w-full h-full" />
@@ -115,7 +115,7 @@ export default async function MediaDetailPage({ params }: { params: Promise<{ id
                 </div>
                 {media.content && <div className="whitespace-pre-wrap text-earth-700 font-serif leading-8">{media.content}</div>}
                 {media.social_video_url && <a href={media.social_video_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-forest-700 font-medium"><ExternalLink className="w-4 h-4" /> เปิดวิดีโอจากต้นทาง</a>}
-                {(previousEpisode || nextEpisode) && <nav className="flex justify-between gap-3 border-t pt-6">
+                {(previousEpisode || nextEpisode) && <nav className="flex justify-between gap-1 border-t pt-6">
                   {previousEpisode ? <Link href={`/media/${previousEpisode}`} className="text-sm font-medium text-forest-700 hover:text-forest-950">← ตอนก่อนหน้า</Link> : <span />}
                   {nextEpisode ? <Link href={`/media/${nextEpisode}`} className="text-sm font-medium text-forest-700 hover:text-forest-950">ตอนถัดไป →</Link> : <span />}
                 </nav>}

@@ -16,9 +16,8 @@ export default async function DepartmentDetailPage({ params }: { params: Promise
   const department = result.rows[0];
   if (!department) notFound();
   const responsibilities = Array.isArray(department.responsibilities) && department.responsibilities.length ? department.responsibilities : [
-    `กำหนดนโยบายและแผนงานปฏิบัติการประจำปีของ ${department.title}`,
-    'ลงพื้นที่ ติดตาม ประเมินผล และรายงานผลสัมฤทธิ์ต่อคณะกรรมการบริหารมูลนิธิฯ',
-    'บูรณาการความร่วมมือกับหน่วยงานภาครัฐ ท้องถิ่น และประชาชนในพื้นที่รอยต่อ ๕ จังหวัด',
+    `รายชื่อคณะอนุกรรมการ ${department.title}`,
+
   ];
 
   return (
@@ -29,16 +28,16 @@ export default async function DepartmentDetailPage({ params }: { params: Promise
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">{department.title}</h1>
         <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">คณะอนุกรรมการเฉพาะด้าน ลำดับที่ {department.sort_order}</p>
       </div>
-      
+
       <main className="max-w-4xl mx-auto px-4 py-12 flex-1 w-full space-y-8">
         <Link href="/committee/sub-committee" className="inline-flex items-center gap-2 text-forest-700 font-medium hover:text-forest-900 transition">
           <ArrowLeft className="w-4 h-4" /> กลับหน้ารวมคณะอนุกรรมการ
         </Link>
-        
+
         <div className="bg-white rounded-3xl p-8 md:p-12 shadow-sm border border-gray-100 space-y-8">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
             <div className="p-3 bg-forest-50 rounded-xl"><Users className="w-6 h-6 text-forest-700" /></div>
-            <h2 className="text-2xl font-bold text-forest-950">ขอบเขตอำนาจหน้าที่</h2>
+            <h2 className="text-2xl font-bold text-forest-950">รายชื่อ{department.title}</h2>
           </div>
           {department.description && <p className="font-serif text-earth-700 leading-relaxed">{department.description}</p>}
           <ul className="space-y-4 font-serif text-earth-800">
