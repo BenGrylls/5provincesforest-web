@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { canManageHistory, isAuthenticated } from "@/lib/auth";
+import { sameOrigin } from "@/lib/csrf";
 
 export interface HistoryImageItem {
   id: string;
@@ -66,6 +67,10 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  // PATCH(8): เช็ค Origin เป็นเกราะสำรองกัน CSRF
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ success: false, message: "CSRF check failed" }, { status: 403 });
+  }
   // เดิมไม่มีการตรวจสิทธิ์เลย ใครก็เขียนทับเนื้อหาหน้าประวัติได้โดยไม่ต้องเข้าสู่ระบบ
   // และสิทธิ์ 'ประวัติความเป็นมา' ที่กำหนดให้ sub-admin ก็ไม่มีผลจริง
   if (!isAuthenticated(req)) {

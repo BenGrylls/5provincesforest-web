@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
+import { sameOrigin } from '@/lib/csrf';
 import { query } from '@/lib/db';
 import { isImage, saveUpload } from '@/lib/uploads';
 
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const form = await request.formData();
   const image = form.get('image');

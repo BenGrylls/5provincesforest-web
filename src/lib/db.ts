@@ -6,6 +6,23 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+// PATCH(7): เตือนเมื่อยังใช้ค่า default จาก docker-compose/.env.example ตอนขึ้น production จริง
+// (ไม่ throw/บล็อกการทำงาน แค่เตือนใน log กันลืมเปลี่ยนก่อน deploy)
+function warnOnInsecureDefaults() {
+  if (process.env.NODE_ENV !== 'production') return;
+  const url = process.env.DATABASE_URL || '';
+  if (/password123|forest_db/.test(url)) {
+    console.warn('⚠️  DATABASE_URL ยังใช้ credential ตั้งต้นจาก docker-compose — เปลี่ยนก่อนใช้งานจริง');
+  }
+  if (
+    process.env.ADMIN_PASSWORD === 'replace-with-a-long-unique-password' ||
+    /replace-with/.test(process.env.ADMIN_SESSION_TOKEN || '')
+  ) {
+    console.warn('⚠️  ADMIN_PASSWORD / ADMIN_SESSION_TOKEN ยังใช้ค่าตั้งต้นจาก .env.example — เปลี่ยนก่อนใช้งานจริง');
+  }
+}
+warnOnInsecureDefaults();
+
 let initialization: Promise<void> | undefined;
 
 export async function query(text: string, params?: unknown[]) {
@@ -80,6 +97,9 @@ export async function initDB() {
       permissions TEXT[] DEFAULT ARRAY[]::TEXT[],
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- PATCH(4): session revocation แบบ "generation" — token ที่ออกก่อนเวลานี้ถือว่าเพิกถอนแล้ว
+    ALTER TABLE sub_admins ADD COLUMN IF NOT EXISTS session_not_before BIGINT DEFAULT 0;
 
     CREATE TABLE IF NOT EXISTS committee_profiles (
       id TEXT PRIMARY KEY,

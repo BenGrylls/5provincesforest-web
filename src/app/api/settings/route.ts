@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
+import { sameOrigin } from '@/lib/csrf';
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   // เดิมขอแค่ "ล็อกอินแล้ว" ทำให้ sub-admin คนไหนก็สั่งเปิดโหมดขาวดำทั้งเว็บได้
   // ทั้งที่หน้า /admin/settings สงวนไว้ให้ super admin เท่านั้น
   // (src/proxy.ts กัน sub-admin ไว้แค่ระดับ UX ไม่ได้กันการยิง API ตรงๆ)

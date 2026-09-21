@@ -48,7 +48,8 @@ export function createSessionToken(username, role, ttlMs = DEFAULT_TTL_MS) {
   if (role !== 'super_admin' && role !== 'sub_admin') {
     throw new Error('role ไม่ถูกต้อง');
   }
-  const payload = { u: username, r: role, e: Date.now() + ttlMs };
+  // PATCH(4): เพิ่ม i (issued at) ไว้เทียบกับ session_not_before ตอน revoke session
+  const payload = { u: username, r: role, e: Date.now() + ttlMs, i: Date.now() };
   const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   const signature = sign(payloadB64);
   return `${payloadB64}.${signature}`;
@@ -57,7 +58,7 @@ export function createSessionToken(username, role, ttlMs = DEFAULT_TTL_MS) {
 /**
  * ตรวจสอบ session token ที่ได้จาก cookie "admin_token"
  * @param {string | undefined | null} token
- * @returns {{ username: string, role: 'super_admin' | 'sub_admin', expires: number } | null}
+ * @returns {{ username: string, role: 'super_admin' | 'sub_admin', expires: number, issuedAt: number } | null}
  *   คืนค่า null ถ้า token ไม่มี, รูปแบบผิด, ลายเซ็นไม่ตรง, หรือหมดอายุแล้ว
  */
 export function verifySessionToken(token) {
@@ -101,5 +102,9 @@ export function verifySessionToken(token) {
 
   if (Date.now() > payload.e) return null; // token หมดอายุแล้ว
 
-  return { username: payload.u, role: payload.r, expires: payload.e };
+  // PATCH(4): token รุ่นก่อน patch นี้จะไม่มี i (issued at) — ถือว่า 0 (เก่าที่สุด)
+  // ไม่ทำให้ token เก่าใช้ไม่ได้ทันที มีผลเฉพาะตอนถูก revoke จริงๆ เท่านั้น
+  const issuedAt = typeof payload.i === 'number' ? payload.i : 0;
+
+  return { username: payload.u, role: payload.r, expires: payload.e, issuedAt };
 }

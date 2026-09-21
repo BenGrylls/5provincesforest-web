@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { canManageCommittee, isAuthenticated } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { isImage } from '@/lib/uploads';
+import { sameOrigin } from '@/lib/csrf';
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const contentType = request.headers.get('content-type') || '';
   const form = contentType.includes('multipart/form-data') ? await request.formData() : null;
@@ -50,6 +52,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { title } = await request.json();
   if (typeof title !== 'string' || !title.trim()) return NextResponse.json({ error: 'กรุณาระบุชื่อฝ่าย' }, { status: 400 });
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const id = Number(new URL(request.url).searchParams.get('id'));
   if (!Number.isSafeInteger(id)) return NextResponse.json({ error: 'ไม่พบฝ่ายที่ต้องการลบ' }, { status: 400 });

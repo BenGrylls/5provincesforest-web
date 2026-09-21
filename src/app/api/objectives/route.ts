@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { canManageObjectives, isAuthenticated } from '@/lib/auth';
+import { sameOrigin } from '@/lib/csrf';
 
 export const OBJECTIVE_ICONS = ['leaf', 'shield', 'target', 'droplet', 'users', 'heart'] as const;
 type ObjectiveIcon = (typeof OBJECTIVE_ICONS)[number];
@@ -11,6 +12,10 @@ function isIcon(value: unknown): value is ObjectiveIcon {
 
 /** ตรวจสิทธิ์สำหรับทุก method ที่เขียนข้อมูล */
 async function guard(request: Request) {
+  // PATCH(8): เช็ค Origin เป็นเกราะสำรองกัน CSRF
+  if (!sameOrigin(request)) {
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 });
   }

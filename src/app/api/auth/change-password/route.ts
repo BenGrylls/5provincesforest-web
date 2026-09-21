@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAdminSession, isAuthenticated } from '@/lib/auth';
+import { sameOrigin } from '@/lib/csrf';
 import { query } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/security';
+import { revokeSessionsFor } from '@/lib/session-revocation';
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const session = await getAdminSession(request);
   const username = session?.username;
@@ -17,5 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'รหัสผ่านปัจจุบันไม่ถูกต้อง' }, { status: 400 });
   }
   await query('UPDATE sub_admins SET password_hash = $1 WHERE username = $2', [await hashPassword(newPassword), username]);
+  // PATCH(4): เพิกถอน session เก่าทั้งหมดของ user นี้ (รวม session ปัจจุบัน) บังคับ login ใหม่ด้วยรหัสผ่านใหม่
+  await revokeSessionsFor(username);
   return NextResponse.json({ success: true });
 }

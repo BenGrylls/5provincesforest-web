@@ -93,7 +93,7 @@ export const ADMIN_USERNAME_COOKIE = 'admin_username';
 
 export type ContentCategory = 'news' | 'media' | 'publications';
 
-const CATEGORY_PERMISSIONS: Record<ContentCategory, string> = {
+export const CATEGORY_PERMISSIONS: Record<ContentCategory, string> = {
   news: 'ข่าวสารและกิจกรรม',
   media: 'สื่อและสารคดีธรรมชาติ',
   publications: 'คลังเอกสารและวารสาร',
@@ -119,15 +119,22 @@ export async function getAdminSession(request: Request) {
   const verified = verifySessionToken(token);
   if (!verified) return null;
 
-  const { username, role } = verified;
+  const { username, role, issuedAt } = verified;
   if (role !== 'sub_admin') {
     // เดิมคืนแค่ 3 หมวดเนื้อหา ทำให้ session ของ super admin ดูเหมือนไม่มีสิทธิ์
     // คณะกรรมการ/ประวัติ/วัตถุประสงค์ ทั้งที่เข้าถึงได้จริง (ฟังก์ชันตรวจสิทธิ์
     // เช็ค role === 'super_admin' ก่อนอยู่แล้ว) คืนให้ครบเพื่อไม่ให้เข้าใจผิด
     return { role: 'super_admin' as const, username, permissions: [...PERMISSIONS] };
   }
-  const result = await query('SELECT permissions FROM sub_admins WHERE username = $1', [username]);
-  return { role: 'sub_admin' as const, username, permissions: Array.isArray(result.rows[0]?.permissions) ? result.rows[0].permissions : [] };
+  const result = await query(
+    'SELECT permissions, COALESCE(session_not_before, 0) AS snb FROM sub_admins WHERE username = $1',
+    [username],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  // PATCH(4): token ที่ออกก่อนการเพิกถอนล่าสุดของ user นี้ (เช่นเปลี่ยนสิทธิ์/รหัสผ่าน) ถือว่าใช้ไม่ได้แล้ว
+  if (issuedAt < Number(row.snb)) return null;
+  return { role: 'sub_admin' as const, username, permissions: Array.isArray(row.permissions) ? row.permissions : [] };
 }
 
 /**

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, ExternalLink, Image as ImageIcon, Loader, Plus, Save, Trash2 } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
+import AutoTextarea from '@/components/admin/AutoTextarea';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import { toast } from '@/components/admin/toast';
 
@@ -222,11 +223,11 @@ export default function CommitteeManagementPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-gray-600">รายละเอียดฝ่าย</label>
-                  <textarea value={unit.description} onChange={(event) => updateUnit(unit.id, { description: event.target.value })} placeholder="อธิบายภาพรวมของฝ่ายนี้" rows={2} className={inputClass} />
+                  <AutoTextarea value={unit.description} onChange={(event) => updateUnit(unit.id, { description: event.target.value })} placeholder="อธิบายภาพรวมของฝ่ายนี้" rows={2} className={inputClass} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-gray-600">รายชื่อ</label>
-                  <textarea
+                  <AutoTextarea
                     value={unit.responsibilities.join('\n')}
                     onChange={(event) => updateUnit(unit.id, { responsibilities: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) })}
                     placeholder="หนึ่งบรรทัดต่อหนึ่งภารกิจ"

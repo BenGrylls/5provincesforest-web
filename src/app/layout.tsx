@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="th" className="scroll-smooth">
+    <html lang="th" className="scroll-smooth" data-scroll-behavior="smooth">
       <body className={`font-sans bg-earth-100 text-earth-900 ${isGrayscale ? 'grayscale' : ''}`}>
         {children}
       </body>

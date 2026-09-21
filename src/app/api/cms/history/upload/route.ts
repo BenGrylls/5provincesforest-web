@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canManageHistory, isAuthenticated } from "@/lib/auth";
+import { sameOrigin } from "@/lib/csrf";
 import { saveUpload } from "@/lib/uploads";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export async function POST(req: NextRequest) {
+  if (!sameOrigin(req)) {
+    return NextResponse.json({ success: false, message: "CSRF check failed" }, { status: 403 });
+  }
   // เดิมไม่มีการตรวจสิทธิ์เลย ใครก็อัปโหลดไฟล์ขึ้นเซิร์ฟเวอร์ได้โดยไม่ต้องเข้าสู่ระบบ
   if (!isAuthenticated(req)) {
     return NextResponse.json({ success: false, message: "กรุณาเข้าสู่ระบบ" }, { status: 401 });

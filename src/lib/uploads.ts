@@ -19,6 +19,33 @@ export type UploadFolder = 'news' | 'media' | 'publications' | 'history' | 'cove
 
 const UPLOADS_ROOT = path.join(process.cwd(), 'public', 'uploads');
 
+// PATCH(5): ตรวจ magic bytes จริงของเนื้อไฟล์ ไม่เชื่อ file.type ที่ client ส่งมาเฉยๆ
+// (เดิม client อ้าง Content-Type อะไรมาก็เชื่อหมด ใครก็ตั้งชื่อ/ประเภทไฟล์ปลอมได้)
+function matchesMagic(bytes: Uint8Array, signature: number[], offset = 0): boolean {
+  if (bytes.length < offset + signature.length) return false;
+  return signature.every((b, i) => bytes[offset + i] === b);
+}
+
+const MAGIC_CHECKS: Record<string, (bytes: Uint8Array) => boolean> = {
+  'image/jpeg': (b) => matchesMagic(b, [0xFF, 0xD8, 0xFF]),
+  'image/png': (b) => matchesMagic(b, [0x89, 0x50, 0x4E, 0x47]),
+  'image/gif': (b) => matchesMagic(b, [0x47, 0x49, 0x46]), // GIF8
+  'image/webp': (b) => matchesMagic(b, [0x52, 0x49, 0x46, 0x46]) && matchesMagic(b, [0x57, 0x45, 0x42, 0x50], 8), // RIFF....WEBP
+  'application/pdf': (b) => matchesMagic(b, [0x25, 0x50, 0x44, 0x46]), // %PDF
+  // mp4/webm มีหลายรูปแบบ container — เช็คแบบหลวมพอกันของปลอมชัดๆ: webm = EBML header, mp4 = ftyp box ที่ offset 4
+  'video/webm': (b) => matchesMagic(b, [0x1A, 0x45, 0xDF, 0xA3]),
+  'video/mp4': (b) => matchesMagic(b, [0x66, 0x74, 0x79, 0x70], 4), // 'ftyp' ที่ offset 4
+};
+
+async function validateMagicBytes(file: File, declaredType: string) {
+  const check = MAGIC_CHECKS[declaredType];
+  if (!check) return;
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  if (!check(head)) {
+    throw new Error('เนื้อหาไฟล์ไม่ตรงกับชนิดที่ระบุ');
+  }
+}
+
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -76,6 +103,9 @@ export async function saveUpload(file: File, folder: UploadFolder, options: Save
   if (maxSize && file.size > maxSize) {
     throw new Error(`ไฟล์มีขนาดใหญ่เกินไป (สูงสุด ${Math.round(maxSize / 1024 / 1024)} MB)`);
   }
+
+  // PATCH(5): ตรวจ magic bytes ก่อนเขียนลงดิสก์ กัน content ไม่ตรงกับนามสกุลไฟล์
+  await validateMagicBytes(file, file.type);
 
   const uploadDir = path.join(UPLOADS_ROOT, folder);
   await mkdir(uploadDir, { recursive: true });

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
+import { sameOrigin } from '@/lib/csrf';
 import { query } from '@/lib/db';
 import { hashPassword } from '@/lib/security';
 import { isPermission } from '@/lib/permissions';
+import { revokeSessionsFor } from '@/lib/session-revocation';
 
 /** กรองเฉพาะสิทธิ์ที่มีอยู่จริง เดิมรับ string อะไรก็ได้ พิมพ์ผิดก็บันทึกลงฐานข้อมูลแล้วไม่มีผลอะไร */
 function cleanPermissions(value: unknown) {
@@ -16,6 +18,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { name, username, password, permissions } = await request.json();
   if (typeof name !== 'string' || typeof username !== 'string' || typeof password !== 'string' || !name.trim() || !username.trim() || password.length < 8) {
@@ -33,6 +36,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id, permissions } = await request.json();
   if (!Number.isSafeInteger(id) || !Array.isArray(permissions)) {
@@ -43,5 +47,7 @@ export async function PATCH(request: Request) {
     [cleanPermissions(permissions), id],
   );
   if (!result.rows[0]) return NextResponse.json({ error: 'ไม่พบบัญชี Sub-Admin' }, { status: 404 });
+  // PATCH(4): เพิกถอน session เก่าของ user นี้ทันที กัน session ที่มีสิทธิ์แบบก่อนแก้ยังใช้งานต่อได้
+  await revokeSessionsFor(result.rows[0].username);
   return NextResponse.json(result.rows[0]);
 }
