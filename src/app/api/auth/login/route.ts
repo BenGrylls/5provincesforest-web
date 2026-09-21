@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { ADMIN_ROLE_COOKIE, ADMIN_USERNAME_COOKIE, createSessionToken, isAuthConfigured, isValidLogin, SESSION_COOKIE } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { verifyPassword } from '@/lib/security';
+// PATCH(1): rate limiting + audit log ของความพยายามที่ล้มเหลว
+import { checkLoginAllowed, recordLoginFailure, retryAfterSeconds } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +14,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Server authentication is not configured' },
         { status: 503 }
+      );
+    }
+
+    // PATCH(1): block ถ้าพยายามเกิน 5 ครั้งใน 15 นาที (ต่อ IP+username)
+    const uname = typeof username === 'string' ? username : '';
+    if (!checkLoginAllowed(request, uname)) {
+      console.warn(`[auth] rate-limited login for "${uname}"`);
+      return NextResponse.json(
+        { error: 'พยายามล็อกอินมากเกินไป กรุณารอสักครู่แล้วลองอีกครั้ง' },
+        { status: 429, headers: { 'Retry-After': String(retryAfterSeconds(request, uname)) } }
       );
     }
 
@@ -29,6 +41,14 @@ export async function POST(request: Request) {
       }
     }
     if (!isValid) {
+      // PATCH(1): นับความพยายามที่ล้มเหลว + บันทึกลง admin_logs (fail2ban ยึดจาก log นี้ได้)
+      recordLoginFailure(request, uname);
+      try {
+        await query(
+          'INSERT INTO admin_logs (admin_username, action, target_title, category) VALUES ($1, $2, $3, $4)',
+          [uname || 'unknown', 'LOGIN_FAILED', (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown', 'auth']
+        );
+      } catch { /* ไม่ให้ log DB ล้มเหลวแล้วกลบ 401 เดิม */ }
       return NextResponse.json(
         { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
