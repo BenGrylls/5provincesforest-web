@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Film, Newspaper, Plus, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, BookOpen, Film, Newspaper, Plus, ShieldAlert, Users, type LucideIcon } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
 import { EmptyState, TableSkeleton } from '@/components/admin/States';
 import { useAdminSession } from '@/components/admin/useAdminSession';
@@ -12,6 +12,13 @@ type Article = {
   title: string;
   category: string;
   published_at?: string;
+};
+
+type LogSummary = {
+  loginFailures: { ip_address: string; count: number; last_attempt: string }[];
+  rateLimited: { ip_address: string; admin_username: string; last_hit: string }[];
+  recentDenied: { admin_username: string; action: string; target_title: string; category: string; ip_address: string; created_at: string }[];
+  warnings: string[];
 };
 
 const CATEGORIES = [
@@ -69,6 +76,7 @@ export default function AdminDashboard() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [recent, setRecent] = useState<Article[]>([]);
   const [subAdminCount, setSubAdminCount] = useState<number | null>(null);
+  const [security, setSecurity] = useState<LogSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const allowed = CATEGORIES.filter((category) => canManage(category.permission));
@@ -111,6 +119,14 @@ export default function AdminDashboard() {
       .then((data) => setSubAdminCount(Array.isArray(data) ? data.length : 0));
   }, [isSuperAdmin]);
 
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetch('/api/logs/summary')
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((data) => setSecurity(data));
+  }, [isSuperAdmin]);
+
   const busy = sessionLoading || loading;
 
   return (
@@ -147,6 +163,83 @@ export default function AdminDashboard() {
           />
         )}
       </div>
+
+      {isSuperAdmin && security && security.warnings.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-2">
+          <div className="flex items-center gap-2 font-bold text-red-800 text-sm">
+            <AlertTriangle className="w-4 h-4" /> พบสัญญาณผิดปกติ
+          </div>
+          <ul className="text-xs text-red-700 space-y-1 list-disc list-inside">
+            {security.warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {isSuperAdmin && security && (security.loginFailures.length > 0 || security.rateLimited.length > 0 || security.recentDenied.length > 0) && (
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-red-500" />
+              <h3 className="font-bold text-gray-900 text-sm">Login ล้มเหลว (24 ชม.)</h3>
+            </div>
+            {security.loginFailures.length === 0 ? (
+              <p className="text-xs text-gray-400 p-4">ไม่มีรายการ</p>
+            ) : (
+              <ul className="divide-y divide-gray-50 text-xs max-h-64 overflow-y-auto">
+                {security.loginFailures.map((row) => (
+                  <li key={row.ip_address} className="px-4 py-2.5 flex justify-between gap-2">
+                    <span className="font-mono text-gray-700">{row.ip_address}</span>
+                    <span className="font-bold text-red-600 shrink-0">{row.count} ครั้ง</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-500" />
+              <h3 className="font-bold text-gray-900 text-sm">กำลังโดน Rate Limit</h3>
+            </div>
+            {security.rateLimited.length === 0 ? (
+              <p className="text-xs text-gray-400 p-4">ไม่มี IP ที่ถูกบล็อกอยู่ตอนนี้</p>
+            ) : (
+              <ul className="divide-y divide-gray-50 text-xs max-h-64 overflow-y-auto">
+                {security.rateLimited.map((row, index) => (
+                  <li key={index} className="px-4 py-2.5">
+                    <p className="font-mono text-gray-700">{row.ip_address}</p>
+                    <p className="text-gray-400">username: {row.admin_username}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-gray-400" />
+                <h3 className="font-bold text-gray-900 text-sm">ถูกปฏิเสธล่าสุด</h3>
+              </div>
+              <Link href="/admin/content?tab=logs" className="text-[11px] text-forest-700 hover:underline shrink-0">ดูทั้งหมด</Link>
+            </div>
+            {security.recentDenied.length === 0 ? (
+              <p className="text-xs text-gray-400 p-4">ไม่มีรายการ</p>
+            ) : (
+              <ul className="divide-y divide-gray-50 text-xs max-h-64 overflow-y-auto">
+                {security.recentDenied.map((row, index) => (
+                  <li key={index} className="px-4 py-2.5">
+                    <p className="text-gray-700">{row.admin_username} · <span className="font-bold">{row.action}</span></p>
+                    <p className="text-gray-400 truncate">{row.target_title || row.category}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">

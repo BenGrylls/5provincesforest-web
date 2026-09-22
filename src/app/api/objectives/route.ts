@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { canManageObjectives, isAuthenticated } from '@/lib/auth';
+import { canManageObjectives, getAdminSession, isAuthenticated } from '@/lib/auth';
+import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
 
 export const OBJECTIVE_ICONS = ['leaf', 'shield', 'target', 'droplet', 'users', 'heart'] as const;
@@ -14,12 +15,19 @@ function isIcon(value: unknown): value is ObjectiveIcon {
 async function guard(request: Request) {
   // PATCH(8): เช็ค Origin เป็นเกราะสำรองกัน CSRF
   if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
     return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
   }
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: 'กรุณาเข้าสู่ระบบ' }, { status: 401 });
   }
   if (!await canManageObjectives(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, {
+      username: actor?.username || 'unknown',
+      category: 'objectives',
+      reason: 'ไม่มีสิทธิ์แก้ไขวัตถุประสงค์และภารกิจ',
+    });
     return NextResponse.json({ error: 'ไม่มีสิทธิ์แก้ไขวัตถุประสงค์และภารกิจ' }, { status: 403 });
   }
   return null;
@@ -51,6 +59,16 @@ export async function POST(request: Request) {
        RETURNING id, title, description, icon, sort_order`,
       [title.trim()],
     );
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'CREATE',
+      category: 'objectives',
+      targetType: 'objective',
+      targetId: result.rows[0].id,
+      targetTitle: result.rows[0].title,
+    });
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch {
     return NextResponse.json({ error: 'เพิ่มข้อมูลไม่สำเร็จ' }, { status: 500 });
@@ -76,6 +94,16 @@ export async function PATCH(request: Request) {
       for (const [index, id] of body.ids.entries()) {
         await query('UPDATE objectives SET sort_order = $1 WHERE id = $2', [index + 1, id]);
       }
+      const actor = await getAdminSession(request);
+      await writeAuditLog({
+        request,
+        username: actor?.username || 'unknown',
+        action: 'REORDERED',
+        category: 'objectives',
+        targetType: 'objective',
+        targetTitle: 'ลำดับวัตถุประสงค์และภารกิจ',
+        detail: { order: body.ids },
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -88,6 +116,16 @@ export async function PATCH(request: Request) {
       [title.trim(), typeof description === 'string' ? description : '', isIcon(icon) ? icon : 'leaf', id],
     );
     if (result.rows.length === 0) return NextResponse.json({ error: 'ไม่พบข้อมูล' }, { status: 404 });
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'UPDATE',
+      category: 'objectives',
+      targetType: 'objective',
+      targetId: id,
+      targetTitle: result.rows[0].title,
+    });
     return NextResponse.json(result.rows[0]);
   } catch {
     return NextResponse.json({ error: 'บันทึกไม่สำเร็จ' }, { status: 500 });
@@ -103,7 +141,18 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'ไม่พบข้อมูล' }, { status: 400 });
   }
   try {
+    const target = await query('SELECT title FROM objectives WHERE id = $1', [id]);
     await query('DELETE FROM objectives WHERE id = $1', [id]);
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'DELETE',
+      category: 'objectives',
+      targetType: 'objective',
+      targetId: id,
+      targetTitle: target.rows[0]?.title || `#${id}`,
+    });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: 'ลบไม่สำเร็จ' }, { status: 500 });

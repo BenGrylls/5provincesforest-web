@@ -1,18 +1,32 @@
 import { NextResponse } from 'next/server';
-import { isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
+import { getAdminSession, isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
+import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
 import { query } from '@/lib/db';
 import { isImage, saveUpload } from '@/lib/uploads';
 
 export async function GET(request: Request) {
-  if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await isSuperAdminRequest(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'settings', reason: 'ไม่ใช่ super admin' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const result = await query('SELECT important_cover_enabled, important_cover_image, important_cover_title, important_cover_message, important_cover_link, important_cover_link_text, important_cover_subtitle, important_cover_date, important_cover_footer, important_cover_ornament, important_cover_title_size, important_cover_subtitle_size, important_cover_date_size, important_cover_footer_size FROM site_settings WHERE id = $1', ['global']);
   return NextResponse.json(result.rows[0] || {});
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
-  if (!isAuthenticated(request) || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await isSuperAdminRequest(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'settings', reason: 'ไม่ใช่ super admin' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const form = await request.formData();
   const image = form.get('image');
   const ornament = form.get('ornament');
@@ -41,5 +55,16 @@ export async function POST(request: Request) {
   if (enabled && (!imagePath || !title)) return NextResponse.json({ error: 'กรุณาระบุรูปภาพและหัวข้อก่อนเปิดใช้งาน' }, { status: 400 });
   if (link && !/^https?:\/\//.test(link) && !link.startsWith('/')) return NextResponse.json({ error: 'ลิงก์ไม่ถูกต้อง' }, { status: 400 });
   await query('UPDATE site_settings SET important_cover_enabled = $1, important_cover_image = $2, important_cover_title = $3, important_cover_message = $4, important_cover_link = $5, important_cover_link_text = $6, important_cover_subtitle = $7, important_cover_date = $8, important_cover_footer = $9, important_cover_ornament = $10, important_cover_title_size = $11, important_cover_subtitle_size = $12, important_cover_date_size = $13, important_cover_footer_size = $14 WHERE id = $15', [enabled, imagePath, title, message, link, linkText, subtitle, date, footer, ornamentPath, fontSize('titleSize', 28), fontSize('subtitleSize', 20), fontSize('dateSize', 16), fontSize('footerSize', 12), 'global']);
+  const actor = await getAdminSession(request);
+  await writeAuditLog({
+    request,
+    username: actor?.username || 'unknown',
+    action: 'SETTINGS_UPDATED',
+    category: 'settings',
+    targetType: 'important_cover',
+    targetId: 'global',
+    targetTitle: title || 'Cover วันสำคัญ',
+    detail: { enabled },
+  });
   return NextResponse.json({ success: true, imagePath, ornamentPath });
 }

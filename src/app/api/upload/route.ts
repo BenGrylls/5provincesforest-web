@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { canAccessCategory, canManageHistory, isAuthenticated, isSuperAdminRequest, type ContentCategory } from '@/lib/auth';
+import { canAccessCategory, canManageHistory, getAdminSession, isAuthenticated, isSuperAdminRequest, type ContentCategory } from '@/lib/auth';
+import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
 import { saveUpload, type UploadFolder } from '@/lib/uploads';
 
@@ -19,7 +20,10 @@ const FOLDER_GUARDS: Record<UploadFolder, (request: Request) => Promise<boolean>
 };
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -35,10 +39,29 @@ export async function POST(request: Request) {
 
     // PATCH(3): บังคับสิทธิ์รายโฟลเดอร์
     if (!await FOLDER_GUARDS[folder as UploadFolder](request)) {
+      const actor = await getAdminSession(request);
+      await logForbidden(request, {
+        username: actor?.username || 'unknown',
+        category: 'upload',
+        targetType: 'upload_folder',
+        targetTitle: folder,
+        reason: 'ไม่มีสิทธิ์อัปโหลดเข้าโฟลเดอร์นี้',
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ success: true, filePath: await saveUpload(file, folder as UploadFolder) });
+    const filePath = await saveUpload(file, folder as UploadFolder);
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'UPLOAD',
+      category: 'upload',
+      targetType: 'upload_folder',
+      targetTitle: file.name,
+      detail: { folder, path: filePath, size: file.size, type: file.type },
+    });
+    return NextResponse.json({ success: true, filePath });
   } catch (error) {
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'อัปโหลดไฟล์ไม่สำเร็จ' }, { status: 400 });
   }

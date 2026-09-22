@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
-import { canManageCommittee, isAuthenticated } from '@/lib/auth';
+import { canManageCommittee, getAdminSession, isAuthenticated } from '@/lib/auth';
+import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { query } from '@/lib/db';
 import { isImage } from '@/lib/uploads';
 import { sameOrigin } from '@/lib/csrf';
 
 export async function GET(request: Request) {
-  if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await canManageCommittee(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'committee', reason: 'ไม่มีสิทธิ์จัดการคณะกรรมการ' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const [president, units] = await Promise.all([
     query("SELECT name, position, image_path, image_data IS NOT NULL AS has_image, biography, responsibilities, biography_sections FROM committee_profiles WHERE id = $1", ['president']),
     query('SELECT id, title, description, responsibilities, sort_order FROM committee_units ORDER BY sort_order'),
@@ -14,8 +20,16 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
-  if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await canManageCommittee(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'committee', reason: 'ไม่มีสิทธิ์จัดการคณะกรรมการ' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const contentType = request.headers.get('content-type') || '';
   const form = contentType.includes('multipart/form-data') ? await request.formData() : null;
   const body = form ? { type: form.get('type'), name: form.get('name'), position: form.get('position'), biography: form.get('biography'), responsibilities: form.get('responsibilities'), existingImage: form.get('existingImage') } : await request.json();
@@ -37,35 +51,102 @@ export async function PATCH(request: Request) {
     } else {
       await query('UPDATE committee_profiles SET name = $1, position = $2, image_path = $3, biography = $4, responsibilities = $5, biography_sections = $6 WHERE id = $7', [body.name.trim(), body.position.trim(), imagePath, typeof body.biography === 'string' ? body.biography : '', typeof body.responsibilities === 'string' ? body.responsibilities : '', JSON.stringify(sections), 'president']);
     }
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'UPDATE',
+      category: 'committee',
+      targetType: 'committee_president',
+      targetId: 'president',
+      targetTitle: body.name.trim(),
+    });
     return NextResponse.json({ success: true });
   }
   if (body.type === 'unit' && Number.isSafeInteger(body.id) && typeof body.title === 'string') {
     const responsibilities = Array.isArray(body.responsibilities) ? body.responsibilities.filter((item: unknown) => typeof item === 'string') : [];
     await query('UPDATE committee_units SET title = $1, description = $2, responsibilities = $3 WHERE id = $4', [body.title.trim(), typeof body.description === 'string' ? body.description : '', responsibilities, body.id]);
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'UPDATE',
+      category: 'committee',
+      targetType: 'committee_unit',
+      targetId: body.id,
+      targetTitle: body.title.trim(),
+    });
     return NextResponse.json({ success: true });
   }
   if (body.type === 'unit-order' && Array.isArray(body.ids) && body.ids.every((id: unknown) => Number.isSafeInteger(id))) {
     await Promise.all(body.ids.map((id: number, index: number) => query('UPDATE committee_units SET sort_order = $1 WHERE id = $2', [index + 1, id])));
+    const actor = await getAdminSession(request);
+    await writeAuditLog({
+      request,
+      username: actor?.username || 'unknown',
+      action: 'REORDERED',
+      category: 'committee',
+      targetType: 'committee_unit',
+      targetTitle: 'ลำดับคณะอนุกรรมการ',
+      detail: { order: body.ids },
+    });
     return NextResponse.json({ success: true });
   }
   return NextResponse.json({ error: 'ข้อมูลไม่ถูกต้อง' }, { status: 400 });
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
-  if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await canManageCommittee(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'committee', reason: 'ไม่มีสิทธิ์จัดการคณะกรรมการ' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { title } = await request.json();
   if (typeof title !== 'string' || !title.trim()) return NextResponse.json({ error: 'กรุณาระบุชื่อฝ่าย' }, { status: 400 });
   const order = await query('SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM committee_units');
   const result = await query('INSERT INTO committee_units (title, sort_order) VALUES ($1, $2) RETURNING id, title, description, responsibilities, sort_order', [title.trim(), order.rows[0].next_order]);
+  const actor = await getAdminSession(request);
+  await writeAuditLog({
+    request,
+    username: actor?.username || 'unknown',
+    action: 'CREATE',
+    category: 'committee',
+    targetType: 'committee_unit',
+    targetId: result.rows[0].id,
+    targetTitle: result.rows[0].title,
+  });
   return NextResponse.json(result.rows[0], { status: 201 });
 }
 
 export async function DELETE(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
-  if (!isAuthenticated(request) || !await canManageCommittee(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
+  if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await canManageCommittee(request)) {
+    const actor = await getAdminSession(request);
+    await logForbidden(request, { username: actor?.username || 'unknown', category: 'committee', reason: 'ไม่มีสิทธิ์จัดการคณะกรรมการ' });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const id = Number(new URL(request.url).searchParams.get('id'));
   if (!Number.isSafeInteger(id)) return NextResponse.json({ error: 'ไม่พบฝ่ายที่ต้องการลบ' }, { status: 400 });
+  const target = await query('SELECT title FROM committee_units WHERE id = $1', [id]);
   await query('DELETE FROM committee_units WHERE id = $1', [id]);
+  const actor = await getAdminSession(request);
+  await writeAuditLog({
+    request,
+    username: actor?.username || 'unknown',
+    action: 'DELETE',
+    category: 'committee',
+    targetType: 'committee_unit',
+    targetId: id,
+    targetTitle: target.rows[0]?.title || `#${id}`,
+  });
   return NextResponse.json({ success: true });
 }

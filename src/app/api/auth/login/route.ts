@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { ADMIN_ROLE_COOKIE, ADMIN_USERNAME_COOKIE, createSessionToken, isAuthConfigured, isValidLogin, SESSION_COOKIE } from '@/lib/auth';
+import { writeAuditLog } from '@/lib/audit-log';
 import { query } from '@/lib/db';
 import { verifyPassword } from '@/lib/security';
 // PATCH(1): rate limiting + audit log ของความพยายามที่ล้มเหลว
@@ -21,6 +22,15 @@ export async function POST(request: Request) {
     const uname = typeof username === 'string' ? username : '';
     if (!checkLoginAllowed(request, uname)) {
       console.warn(`[auth] rate-limited login for "${uname}"`);
+      await writeAuditLog({
+        request,
+        username: uname || 'unknown',
+        action: 'LOGIN_RATE_LIMITED',
+        category: 'auth',
+        targetType: 'session',
+        targetTitle: uname || 'unknown',
+        result: 'forbidden',
+      });
       return NextResponse.json(
         { error: 'พยายามล็อกอินมากเกินไป กรุณารอสักครู่แล้วลองอีกครั้ง' },
         { status: 429, headers: { 'Retry-After': String(retryAfterSeconds(request, uname)) } }
@@ -43,12 +53,16 @@ export async function POST(request: Request) {
     if (!isValid) {
       // PATCH(1): นับความพยายามที่ล้มเหลว + บันทึกลง admin_logs (fail2ban ยึดจาก log นี้ได้)
       recordLoginFailure(request, uname);
-      try {
-        await query(
-          'INSERT INTO admin_logs (admin_username, action, target_title, category) VALUES ($1, $2, $3, $4)',
-          [uname || 'unknown', 'LOGIN_FAILED', (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown', 'auth']
-        );
-      } catch { /* ไม่ให้ log DB ล้มเหลวแล้วกลบ 401 เดิม */ }
+      // เดิมต้องยัด IP ใส่ target_title เพราะไม่มีคอลัมน์ ip_address ตอนนี้มีคอลัมน์จริงแล้ว เก็บแยกให้ถูกที่
+      await writeAuditLog({
+        request,
+        username: uname || 'unknown',
+        action: 'LOGIN_FAILED',
+        category: 'auth',
+        targetType: 'session',
+        targetTitle: uname || 'unknown',
+        result: 'failed',
+      });
       return NextResponse.json(
         { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
@@ -72,6 +86,16 @@ export async function POST(request: Request) {
     });
     cookieStore.set({ name: ADMIN_ROLE_COOKIE, value: role, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
     cookieStore.set({ name: ADMIN_USERNAME_COOKIE, value: authenticatedUsername, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
+
+    await writeAuditLog({
+      request,
+      username: authenticatedUsername,
+      action: 'LOGIN_SUCCESS',
+      category: 'auth',
+      targetType: 'session',
+      targetTitle: authenticatedUsername,
+      detail: { role },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -89,6 +89,15 @@ export async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- ขยาย schema log ให้ trace ย้อนหลังได้แม่นยำขึ้น (เดิมมีแค่ target_title ซึ่งถ้าชื่อถูกแก้ทีหลัง
+    -- จะสืบไม่ได้ว่า log เก่าพูดถึงแถวไหนจริงๆ) และเก็บ ip/user-agent/ผลลัพธ์/รายละเอียดก่อน-หลัง
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS target_type TEXT;
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS target_id TEXT;
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS detail JSONB;
+    ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS result TEXT NOT NULL DEFAULT 'success';
+
     CREATE TABLE IF NOT EXISTS sub_admins (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,

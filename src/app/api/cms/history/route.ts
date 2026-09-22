@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { canManageHistory, isAuthenticated } from "@/lib/auth";
+import { canManageHistory, getAdminSession, isAuthenticated } from "@/lib/auth";
+import { logCsrfBlocked, logForbidden, writeAuditLog } from "@/lib/audit-log";
 import { sameOrigin } from "@/lib/csrf";
 
 export interface HistoryImageItem {
@@ -69,6 +70,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   // PATCH(8): เช็ค Origin เป็นเกราะสำรองกัน CSRF
   if (!sameOrigin(req)) {
+    await logCsrfBlocked(req);
     return NextResponse.json({ success: false, message: "CSRF check failed" }, { status: 403 });
   }
   // เดิมไม่มีการตรวจสิทธิ์เลย ใครก็เขียนทับเนื้อหาหน้าประวัติได้โดยไม่ต้องเข้าสู่ระบบ
@@ -77,6 +79,14 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ success: false, message: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
   }
   if (!await canManageHistory(req)) {
+    const actor = await getAdminSession(req);
+    await logForbidden(req, {
+      username: actor?.username || 'unknown',
+      category: 'history',
+      targetType: 'history_page',
+      targetId: 'global',
+      reason: 'ไม่มีสิทธิ์แก้ไขประวัติความเป็นมา',
+    });
     return NextResponse.json({ success: false, message: "ไม่มีสิทธิ์แก้ไขประวัติความเป็นมา" }, { status: 403 });
   }
 
@@ -106,6 +116,16 @@ export async function PUT(req: NextRequest) {
     );
 
     const row = result.rows[0];
+    const actor = await getAdminSession(req);
+    await writeAuditLog({
+      request: req,
+      username: actor?.username || 'unknown',
+      action: 'UPDATE',
+      category: 'history',
+      targetType: 'history_page',
+      targetId: 'global',
+      targetTitle: row.title || 'ประวัติความเป็นมา',
+    });
     return NextResponse.json({
       success: true,
       message: "บันทึกข้อมูลประวัติความเป็นมาเรียบร้อยแล้ว",

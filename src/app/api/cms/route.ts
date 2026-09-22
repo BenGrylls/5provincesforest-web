@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { canAccessCategory, CATEGORY_PERMISSIONS, ContentCategory, getAdminSession, isAuthenticated } from '@/lib/auth';
+import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
 import { isImage, isVideo, isPdf, saveUpload, type UploadFolder } from '@/lib/uploads';
 
@@ -15,13 +16,21 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
+    // ดึง session ไว้ก่อนใช้ทั้งเช็คสิทธิ์และ log
+    const session = await getAdminSession(request);
     if (category && (!['news', 'media', 'publications'].includes(category) || !await canAccessCategory(request, category as ContentCategory))) {
+      await logForbidden(request, {
+        username: session?.username || 'unknown',
+        category: 'cms',
+        targetType: 'article_category',
+        targetTitle: category,
+        reason: 'ไม่มีสิทธิ์เข้าถึงหมวดนี้',
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
     // PATCH(2): เดิม sub-admin ที่เรียกไม่ระบุ category จะได้ข้อมูลทุกหมวด แม้มีสิทธิ์แค่หมวดเดียว
     // ตอนนี้บังคับให้เห็นเฉพาะหมวดที่ตัวเองมีสิทธิ์เท่านั้น
-    const session = await getAdminSession(request);
     let result;
     if (category) {
       result = await query('SELECT *, created_at as published_at FROM articles WHERE category = $1 ORDER BY event_date DESC', [category]);
@@ -42,7 +51,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const contentType = request.headers.get('content-type') || '';
@@ -77,6 +89,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid article data' }, { status: 400 });
     }
     if (!await canAccessCategory(request, category as ContentCategory)) {
+      await logForbidden(request, {
+        username: adminUser,
+        category: 'cms',
+        targetType: 'article_category',
+        targetTitle: category,
+        reason: 'ไม่มีสิทธิ์แก้ไขหมวดนี้',
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (socialVideoUrl && !/^https:\/\//.test(socialVideoUrl)) {
@@ -111,23 +130,41 @@ export async function POST(request: Request) {
     }
 
     if (id) {
+      // ดึงค่าก่อนแก้ไว้เทียบ เก็บลง detail (เฉพาะฟิลด์หลักที่มีความหมายเวลาสืบย้อนหลัง ไม่เอาเนื้อหาเต็ม)
+      const before = await query('SELECT title, category, event_date FROM articles WHERE id = $1', [id]);
+      const beforeRow = before.rows[0];
+
       await query(
         'UPDATE articles SET title = $1, category = $2, content = $3, event_date = $4, image_paths = $5, video_file = $6, social_video_url = $7, series_key = $8, episode_number = $9, pdf_file = $10 WHERE id = $11',
         [title, category, content, activeEventDate, pathsArray, videoFile, socialVideoUrl, seriesKey, episodeNumber, pdfFile, id]
       );
-      await query(
-        'INSERT INTO admin_logs (admin_username, action, target_title, category) VALUES ($1, $2, $3, $4)',
-        [adminUser, 'UPDATE', title, category]
-      );
+      await writeAuditLog({
+        request,
+        username: adminUser,
+        action: 'UPDATE',
+        category,
+        targetType: 'article',
+        targetId: id,
+        targetTitle: title,
+        detail: beforeRow ? {
+          before: { title: beforeRow.title, category: beforeRow.category, event_date: beforeRow.event_date },
+          after: { title, category, event_date: activeEventDate },
+        } : null,
+      });
     } else {
-      await query(
-        'INSERT INTO articles (title, category, content, event_date, image_paths, video_file, social_video_url, series_key, episode_number, pdf_file) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      const created = await query(
+        'INSERT INTO articles (title, category, content, event_date, image_paths, video_file, social_video_url, series_key, episode_number, pdf_file) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
         [title, category, content, activeEventDate, pathsArray, videoFile, socialVideoUrl, seriesKey, episodeNumber, pdfFile]
       );
-      await query(
-        'INSERT INTO admin_logs (admin_username, action, target_title, category) VALUES ($1, $2, $3, $4)',
-        [adminUser, 'INSERT', title, category]
-      );
+      await writeAuditLog({
+        request,
+        username: adminUser,
+        action: 'CREATE',
+        category,
+        targetType: 'article',
+        targetId: created.rows[0]?.id ?? null,
+        targetTitle: title,
+      });
     }
 
     return NextResponse.json({ success: true });
@@ -138,7 +175,10 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!sameOrigin(request)) return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  if (!sameOrigin(request)) {
+    await logCsrfBlocked(request);
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 });
+  }
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { searchParams } = new URL(request.url);
@@ -152,12 +192,26 @@ export async function DELETE(request: Request) {
     if (target.rows.length > 0) {
       const { title, category } = target.rows[0];
       if (!['news', 'media', 'publications'].includes(category) || !await canAccessCategory(request, category as ContentCategory)) {
+        await logForbidden(request, {
+          username: adminUser,
+          category: 'cms',
+          targetType: 'article',
+          targetId: id,
+          targetTitle: title,
+          reason: 'ไม่มีสิทธิ์ลบข้อมูลหมวดนี้',
+        });
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      await query(
-        'INSERT INTO admin_logs (admin_username, action, target_title, category) VALUES ($1, $2, $3, $4)',
-        [adminUser, 'DELETE', title, category]
-      );
+      await writeAuditLog({
+        request,
+        username: adminUser,
+        action: 'DELETE',
+        category,
+        targetType: 'article',
+        targetId: id,
+        targetTitle: title,
+        detail: { deleted: { title, category } },
+      });
     }
 
     await query('DELETE FROM articles WHERE id = $1', [id]);

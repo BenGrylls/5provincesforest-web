@@ -1,7 +1,8 @@
 'use client';
 import React, { useEffect, useState } from 'react';
-import { UserPlus, Users, X } from 'lucide-react';
+import { Trash2, UserPlus, Users, X } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/admin/States';
 import { toast } from '@/components/admin/toast';
 import { PERMISSIONS } from '@/lib/permissions';
@@ -29,6 +30,8 @@ export default function SubAdminPage() {
   const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [editingAdmin, setEditingAdmin] = useState<SubAdmin | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SubAdmin | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchAdmins = async () => {
     setIsLoading(true);
@@ -86,6 +89,21 @@ export default function SubAdminPage() {
     toast.success(`บันทึกสิทธิ์ของ ${editingAdmin.name} เรียบร้อยแล้ว`);
     setEditingAdmin(null);
     setSelectedPerms([]);
+    fetchAdmins();
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    const target = pendingDelete;
+    setDeleting(true);
+    const response = await fetch(`/api/sub-admins?id=${target.id}`, { method: 'DELETE' });
+    setDeleting(false);
+    setPendingDelete(null);
+    if (!response.ok) {
+      toast.error('ลบบัญชีไม่สำเร็จ');
+      return;
+    }
+    toast.success(`ลบบัญชี ${target.name} เรียบร้อยแล้ว — session ที่ค้างอยู่ของบัญชีนี้ถูกตัดทันที`);
     fetchAdmins();
   };
 
@@ -159,7 +177,10 @@ export default function SubAdminPage() {
                     <td className="p-4 text-gray-500">{adm.username}</td>
                     <td className="p-4"><div className="flex flex-wrap gap-1">{permissionBadges(adm.permissions)}</div></td>
                     <td className="p-4 text-right">
-                      <button onClick={() => openEditModal(adm)} className="text-forest-700 bg-forest-50 px-3 py-2 rounded-lg text-xs font-medium hover:bg-forest-100 transition">ปรับเปลี่ยนสิทธิ์</button>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openEditModal(adm)} className="text-forest-700 bg-forest-50 px-3 py-2 rounded-lg text-xs font-medium hover:bg-forest-100 transition">ปรับเปลี่ยนสิทธิ์</button>
+                        <button onClick={() => setPendingDelete(adm)} aria-label={`ลบบัญชี ${adm.name}`} className="text-red-600 bg-red-50 p-2 rounded-lg hover:bg-red-100 transition"><Trash2 className="w-4 h-4" /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -173,7 +194,10 @@ export default function SubAdminPage() {
                     <p className="text-xs text-gray-500">{adm.username}</p>
                   </div>
                   <div className="flex flex-wrap gap-1">{permissionBadges(adm.permissions)}</div>
-                  <button onClick={() => openEditModal(adm)} className="w-full text-forest-700 bg-forest-50 px-3 py-2.5 rounded-lg text-sm font-medium">ปรับเปลี่ยนสิทธิ์</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => openEditModal(adm)} className="flex-1 text-forest-700 bg-forest-50 px-3 py-2.5 rounded-lg text-sm font-medium">ปรับเปลี่ยนสิทธิ์</button>
+                    <button onClick={() => setPendingDelete(adm)} aria-label={`ลบบัญชี ${adm.name}`} className="text-red-600 bg-red-50 px-3 py-2.5 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -230,6 +254,16 @@ export default function SubAdminPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="ลบบัญชีนี้?"
+        description={pendingDelete ? `บัญชี "${pendingDelete.name}" (${pendingDelete.username}) จะเข้าสู่ระบบไม่ได้อีกทันที และ session ที่ค้างอยู่จะถูกตัด — ย้อนกลับไม่ได้` : undefined}
+        confirmLabel={deleting ? 'กำลังลบ...' : 'ลบถาวร'}
+        destructive
+        onConfirm={handleDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </AdminShell>
   );
 }

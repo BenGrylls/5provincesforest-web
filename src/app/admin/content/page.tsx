@@ -113,8 +113,9 @@ function AdminContentInner() {
   const filteredLogs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return logs;
+    // ค้นด้วย IP ได้ด้วย — เป็นคำถามแรกสุดตอนสืบสวนเหตุการณ์ผิดปกติ ("IP นี้เคยทำอะไรบ้าง")
     return logs.filter((log) =>
-      `${log.admin_username} ${log.action} ${log.target_title}`.toLowerCase().includes(keyword));
+      `${log.admin_username} ${log.action} ${log.target_title} ${log.category || ''} ${log.ip_address || ''}`.toLowerCase().includes(keyword));
   }, [logs, search]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -349,7 +350,7 @@ function AdminContentInner() {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder={isLogs ? 'ค้นหาจากชื่อผู้ดูแลหรือหัวข้อ...' : 'ค้นหาจากหัวข้อ...'}
+              placeholder={isLogs ? 'ค้นหาจากชื่อผู้ดูแล, หัวข้อ, หมวด หรือ IP...' : 'ค้นหาจากหัวข้อ...'}
               className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-forest-500 focus:bg-white transition"
             />
           </div>
@@ -385,6 +386,7 @@ function AdminContentInner() {
                 <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-xs">
                   <th className="p-4 font-semibold">ผู้ดูแลระบบ</th>
                   <th className="p-4 font-semibold">การกระทำ</th>
+                  <th className="p-4 font-semibold">หมวด</th>
                   <th className="p-4 font-semibold">หัวข้อ</th>
                   <th className="p-4 font-semibold text-right">วันเวลา</th>
                 </tr>
@@ -393,9 +395,17 @@ function AdminContentInner() {
                 {filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50/50 text-xs">
                     <td className="p-4 font-bold text-forest-900">{log.admin_username}</td>
-                    <td className="p-4"><span className="px-2 py-0.5 rounded font-bold bg-gray-100">{log.action}</span></td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded font-bold ${log.result === 'failed' || log.result === 'forbidden' ? 'bg-red-50 text-red-700' : 'bg-gray-100'}`}>
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="p-4 text-gray-500">{log.category || '-'}</td>
                     <td className="p-4 font-medium text-gray-900">{log.target_title}</td>
-                    <td className="p-4 text-right text-gray-500">{new Date(log.created_at).toLocaleString('th-TH')}</td>
+                    {/* title attribute โชว์ IP/user agent เป็น tooltip ตอน hover — ไม่ใส่เป็นคอลัมน์แยกกันตารางรก */}
+                    <td className="p-4 text-right text-gray-500" title={`IP: ${log.ip_address || '-'}\nอุปกรณ์: ${log.user_agent || '-'}`}>
+                      {new Date(log.created_at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -403,12 +413,15 @@ function AdminContentInner() {
             <ul className="md:hidden divide-y divide-gray-50">
               {filteredLogs.map((log) => (
                 <li key={log.id} className="p-4 space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-gray-100">{log.action}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${log.result === 'failed' || log.result === 'forbidden' ? 'bg-red-50 text-red-700' : 'bg-gray-100'}`}>
+                      {log.action}
+                    </span>
                     <span className="text-xs font-bold text-forest-900">{log.admin_username}</span>
+                    {log.category && <span className="text-xs text-gray-400">· {log.category}</span>}
                   </div>
                   <p className="text-sm font-medium text-gray-900">{log.target_title}</p>
-                  <p className="text-xs text-gray-500">{new Date(log.created_at).toLocaleString('th-TH')}</p>
+                  <p className="text-xs text-gray-500">{new Date(log.created_at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}</p>
                 </li>
               ))}
             </ul>
