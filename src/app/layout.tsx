@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { query } from '@/lib/db';
+import { getIsGrayscale } from '@/lib/settings-cache';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,15 +8,8 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  let isGrayscale = false;
-  try {
-    const res = await query('SELECT is_grayscale FROM site_settings WHERE id = $1', ['global']);
-    if (res.rows.length > 0) {
-      isGrayscale = res.rows[0].is_grayscale;
-    }
-  } catch (e) {
-    // ป้องกันกรณีฐานข้อมูลยังไม่พร้อม
-  }
+  // เดิมยิง query ตรงทุกครั้งที่โหลดหน้า (ทุกหน้าทั่วเว็บ เพราะอยู่ใน root layout) ทำให้ช้าโดยไม่จำเป็น
+  const isGrayscale = await getIsGrayscale();
 
   return (
     <html lang="th" className="scroll-smooth" data-scroll-behavior="smooth">

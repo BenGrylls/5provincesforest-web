@@ -7,6 +7,17 @@ import { verifyPassword } from '@/lib/security';
 // PATCH(1): rate limiting + audit log ของความพยายามที่ล้มเหลว
 import { checkLoginAllowed, recordLoginFailure, retryAfterSeconds } from '@/lib/rate-limit';
 
+// เดิมใช้ secure: process.env.NODE_ENV === 'production' — แต่ `next start` ตั้ง NODE_ENV=production
+// เสมอไม่ว่าจะ serve ผ่าน HTTP หรือ HTTPS จริง ทำให้เข้าเว็บผ่าน HTTP ในวงแลน (ไม่มี TLS) แล้ว cookie
+// ไม่ถูกเก็บเลย (เบราว์เซอร์ปฏิเสธ Secure cookie บน HTTP) — เปลี่ยนมาเช็คจาก request จริงแทน
+// เชื่อ x-forwarded-proto ก่อน เพราะถ้ามี reverse proxy (Nginx/Cloudflare) คั่นอยู่ Next.js จะเห็น
+// request เป็น http เสมอแม้ browser คุยกับ proxy ด้วย https จริง (TLS terminate ที่ proxy)
+function isHttpsRequest(request: Request): boolean {
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  if (forwardedProto) return forwardedProto.split(',')[0].trim() === 'https';
+  return new URL(request.url).protocol === 'https:';
+}
+
 export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
@@ -79,13 +90,13 @@ export async function POST(request: Request) {
       name: SESSION_COOKIE,
       value: sessionToken,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttpsRequest(request),
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24, // 24 hours — ต้องตรงกับ ttlMs เริ่มต้นใน createSessionToken
     });
-    cookieStore.set({ name: ADMIN_ROLE_COOKIE, value: role, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
-    cookieStore.set({ name: ADMIN_USERNAME_COOKIE, value: authenticatedUsername, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
+    cookieStore.set({ name: ADMIN_ROLE_COOKIE, value: role, httpOnly: true, secure: isHttpsRequest(request), sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
+    cookieStore.set({ name: ADMIN_USERNAME_COOKIE, value: authenticatedUsername, httpOnly: true, secure: isHttpsRequest(request), sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 });
 
     await writeAuditLog({
       request,

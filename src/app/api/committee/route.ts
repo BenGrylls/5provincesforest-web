@@ -79,7 +79,14 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   }
   if (body.type === 'unit-order' && Array.isArray(body.ids) && body.ids.every((id: unknown) => Number.isSafeInteger(id))) {
-    await Promise.all(body.ids.map((id: number, index: number) => query('UPDATE committee_units SET sort_order = $1 WHERE id = $2', [index + 1, id])));
+    // PATCH: อัปเดตสองเฟส (เหมือน objectives) — เฟสแรกตั้งเป็นค่าติดลบก่อน
+    // เพื่อเลี่ยงชน sort_order UNIQUE ระหว่างสลับลำดับ แล้วค่อยตั้งเป็นลำดับจริง
+    for (const [index, id] of body.ids.entries()) {
+      await query('UPDATE committee_units SET sort_order = $1 WHERE id = $2', [-(index + 1), id]);
+    }
+    for (const [index, id] of body.ids.entries()) {
+      await query('UPDATE committee_units SET sort_order = $1 WHERE id = $2', [index + 1, id]);
+    }
     const actor = await getAdminSession(request);
     await writeAuditLog({
       request,

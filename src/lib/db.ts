@@ -6,22 +6,39 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// PATCH(7): เตือนเมื่อยังใช้ค่า default จาก docker-compose/.env.example ตอนขึ้น production จริง
-// (ไม่ throw/บล็อกการทำงาน แค่เตือนใน log กันลืมเปลี่ยนก่อน deploy)
-function warnOnInsecureDefaults() {
-  if (process.env.NODE_ENV !== 'production') return;
+// PATCH(7): เดิมแค่ console.warn เมื่อยังใช้ค่า default จาก docker-compose/.env.example — เปลี่ยนเป็น
+// "fail-closed" จริง: ถ้าเป็น production และ DATABASE_URL ไม่ใช่ฐานข้อมูล local (docker-compose ตอน dev)
+// ระบบจะไม่ยอม start เลยจนกว่าจะเปลี่ยนค่า default เหล่านี้ — กันเคส "ลืมเปลี่ยนแล้วก็ปล่อยรันจริงไปเลย"
+// ยังปล่อยให้ `next start` ทดสอบกับ docker-compose local ได้ตามปกติ เพราะ next start ตั้ง NODE_ENV=production
+// เสมอแม้ตอนทดสอบในเครื่อง ถ้าไม่เว้นกรณีนี้ไว้จะบล็อกการทดสอบปกติไปด้วย
+function isLocalDatabaseUrl(url: string) {
+  return /@(localhost|127\.0\.0\.1)[:/]/.test(url);
+}
+
+function checkInsecureDefaults() {
   const url = process.env.DATABASE_URL || '';
-  if (/password123|forest_db/.test(url)) {
-    console.warn('⚠️  DATABASE_URL ยังใช้ credential ตั้งต้นจาก docker-compose — เปลี่ยนก่อนใช้งานจริง');
+  const issues: string[] = [];
+  if (/:password123@/.test(url)) {
+    issues.push('DATABASE_URL ยังใช้รหัสผ่านตั้งต้นจาก docker-compose (password123)');
   }
-  if (
-    process.env.ADMIN_PASSWORD === 'replace-with-a-long-unique-password' ||
-    /replace-with/.test(process.env.ADMIN_SESSION_TOKEN || '')
-  ) {
-    console.warn('⚠️  ADMIN_PASSWORD / ADMIN_SESSION_TOKEN ยังใช้ค่าตั้งต้นจาก .env.example — เปลี่ยนก่อนใช้งานจริง');
+  if (process.env.ADMIN_PASSWORD === 'replace-with-a-long-unique-password') {
+    issues.push('ADMIN_PASSWORD ยังเป็นค่าตั้งต้นจาก .env.example');
+  }
+  if (/replace-with/.test(process.env.ADMIN_SESSION_TOKEN || '')) {
+    issues.push('ADMIN_SESSION_TOKEN ยังเป็นค่าตั้งต้นจาก .env.example');
+  }
+  if (issues.length === 0) return;
+
+  if (process.env.NODE_ENV === 'production' && !isLocalDatabaseUrl(url)) {
+    console.error('❌ พบการตั้งค่าที่ไม่ปลอดภัยสำหรับ production ระบบจะไม่เริ่มทำงาน:');
+    issues.forEach((issue) => console.error(`   - ${issue}`));
+    console.error('แก้ไข environment variables เหล่านี้ก่อนแล้วค่อย deploy ใหม่');
+    process.exit(1);
+  } else {
+    issues.forEach((issue) => console.warn(`⚠️  ${issue}`));
   }
 }
-warnOnInsecureDefaults();
+checkInsecureDefaults();
 
 let initialization: Promise<void> | undefined;
 
@@ -97,6 +114,12 @@ export async function initDB() {
     ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
     ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS detail JSONB;
     ALTER TABLE admin_logs ADD COLUMN IF NOT EXISTS result TEXT NOT NULL DEFAULT 'success';
+
+    -- เดิมไม่มี index เลย พอ log สะสมหลายหมื่นแถว ORDER BY created_at DESC และ query สรุป
+    -- ความปลอดภัย (filter ตาม action + created_at, join ตาม ip_address) จะช้าลงเรื่อยๆ
+    CREATE INDEX IF NOT EXISTS idx_admin_logs_created ON admin_logs (created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_admin_logs_action_created ON admin_logs (action, created_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_logs_ip ON admin_logs (ip_address);
 
     CREATE TABLE IF NOT EXISTS sub_admins (
       id SERIAL PRIMARY KEY,

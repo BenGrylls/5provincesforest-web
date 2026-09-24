@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { getAdminSession, isAuthenticated, isSuperAdminRequest } from '@/lib/auth';
 import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
+import { invalidateGrayscaleCache } from '@/lib/settings-cache';
 
 export async function GET(request: Request) {
   if (!isAuthenticated(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -37,6 +38,8 @@ export async function POST(request: Request) {
       'UPDATE site_settings SET is_grayscale = $1 WHERE id = $2',
       [Boolean(body.isGrayscale), 'global']
     );
+    // ล้าง cache ทันที ไม่งั้นหน้าเว็บจะยังโชว์ค่าเก่าอยู่จนกว่า cache จะหมดอายุ (นานสุด 30 วินาที)
+    invalidateGrayscaleCache();
     const actor = await getAdminSession(request);
     await writeAuditLog({
       request,
