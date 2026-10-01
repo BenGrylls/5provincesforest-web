@@ -68,10 +68,40 @@ async function main() {
       ? await pool.query("DELETE FROM public_page_views WHERE created_at < NOW() - INTERVAL '90 days'")
       : { rowCount: 0 };
 
+    const performanceLogsTable = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'performance_logs'
+      ) AS exists`,
+    );
+    const performanceLogsResult = performanceLogsTable.rows[0].exists
+      ? await pool.query("DELETE FROM performance_logs WHERE created_at < NOW() - INTERVAL '14 days'")
+      : { rowCount: 0 };
+
+    const applicationLogsTable = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'application_logs'
+      ) AS exists`,
+    );
+    const applicationLogsResult = applicationLogsTable.rows[0].exists
+      ? await pool.query("DELETE FROM application_logs WHERE created_at < NOW() - INTERVAL '30 days'")
+      : { rowCount: 0 };
+
+    const securityIncidentsTable = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'security_incidents'
+      ) AS exists`,
+    );
+    const securityIncidentsResult = securityIncidentsTable.rows[0].exists
+      ? await pool.query("DELETE FROM security_incidents WHERE created_at < NOW() - INTERVAL '180 days'")
+      : { rowCount: 0 };
+
     console.log(`[${new Date().toISOString()}] cleanup-logs เสร็จสิ้น`);
     console.log(`  ลบ log ทั่วไปที่เก่ากว่า ${NORMAL_RETENTION_DAYS} วัน: ${normalResult.rowCount} แถว`);
     console.log(`  ลบ log ความปลอดภัยที่เก่ากว่า ${SECURITY_RETENTION_DAYS} วัน: ${securityResult.rowCount} แถว`);
     console.log(`  ลบสถิติผู้เข้าชมที่เก่ากว่า 90 วัน: ${pageViewsResult.rowCount} แถว`);
+    console.log(`  ลบ performance_logs ที่เก่ากว่า 14 วัน: ${performanceLogsResult.rowCount} แถว`);
+    console.log(`  ลบ application_logs ที่เก่ากว่า 30 วัน: ${applicationLogsResult.rowCount} แถว`);
+    console.log(`  ลบ security_incidents ที่เก่ากว่า 180 วัน: ${securityIncidentsResult.rowCount} แถว`);
   } finally {
     await pool.end();
   }

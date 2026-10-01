@@ -211,6 +211,43 @@ export async function initDB() {
       ('ฝ่ายส่งเสริมคุณภาพชีวิตราษฎร', 4), ('ฝ่ายประชาสัมพันธ์และจัดกิจกรรม', 5), ('ฝ่ายหารายได้', 6),
       ('ฝ่ายสวัสดิการ', 7), ('ฝ่ายตรวจสอบและประเมินผล', 8), ('ฝ่ายกฎหมาย', 9), ('ฝ่ายงบประมาณ', 10)
     ON CONFLICT (sort_order) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS security_incidents (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      incident_type TEXT NOT NULL,
+      severity TEXT NOT NULL DEFAULT 'info',
+      ip_address TEXT,
+      username TEXT,
+      endpoint TEXT,
+      detail JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_security_incidents_created ON security_incidents (created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS application_logs (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      log_level TEXT NOT NULL,
+      message TEXT,
+      stack_trace TEXT,
+      endpoint TEXT,
+      user_id TEXT,
+      context JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_application_logs_created ON application_logs (created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS performance_logs (
+      id BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      endpoint TEXT NOT NULL,
+      method TEXT,
+      status_code INTEGER,
+      response_time_ms INTEGER,
+      user_id TEXT,
+      query_count INTEGER,
+      details JSONB
+    );
+    CREATE INDEX IF NOT EXISTS idx_performance_logs_created ON performance_logs (created_at DESC);
   `);
 
   await migrateHistoryFromFile();

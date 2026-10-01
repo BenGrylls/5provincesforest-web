@@ -6,7 +6,7 @@ import { query } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/security';
 import { revokeSessionsFor } from '@/lib/session-revocation';
 import { validatePasswordComplexity } from '@/lib/password-validation';
-import { checkRateLimit, recordRequest, getRateLimitStatus } from '@/lib/api-rate-limit';
+import { checkRateLimit, recordRequest, getRateLimitResetSeconds } from '@/lib/api-rate-limit';
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) {
@@ -17,10 +17,10 @@ export async function POST(request: Request) {
 
   // Rate limit: 5 password changes per 15 minutes per IP
   if (!checkRateLimit(request, 'passwordChange')) {
-    const status = getRateLimitStatus(request, 'passwordChange');
+    const retryAfter = getRateLimitResetSeconds(request, 'passwordChange');
     return NextResponse.json(
       { error: 'Too many password change attempts' },
-      { status: 429, headers: { 'Retry-After': String(status.reset) } },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
   }
   recordRequest(request, 'passwordChange');

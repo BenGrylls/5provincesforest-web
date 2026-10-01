@@ -22,6 +22,13 @@ function isHttpsRequest(request: Request): boolean {
   return new URL(request.url).protocol === 'https:';
 }
 
+// เอา ip เข้า key ของ account-lockout ด้วย กันผู้โจมตีกระจายความพยายามหลาย IP แล้วล็อกบัญชี admin จริง (เหมือน clientIp ใน lib/rate-limit.ts)
+function clientIp(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return request.headers.get('x-real-ip') || 'unknown';
+}
+
 export async function POST(request: Request) {
   try {
     const { username, password } = await request.json();
@@ -54,8 +61,9 @@ export async function POST(request: Request) {
     }
 
     // Check account lockout (exponential backoff after failed attempts)
-    if (uname && isAccountLocked(uname)) {
-      const remainingSeconds = getLockoutTimeRemaining(uname);
+    const ip = clientIp(request);
+    if (uname && isAccountLocked(ip, uname)) {
+      const remainingSeconds = getLockoutTimeRemaining(ip, uname);
       await writeAuditLog({
         request,
         username: uname,
@@ -86,7 +94,7 @@ export async function POST(request: Request) {
     }
     if (!isValid) {
       // PATCH(1): นับความพยายามที่ล้มเหลว + บันทึกลง admin_logs (fail2ban ยึดจาก log นี้ได้)
-      const isNowLocked = recordFailedAttempt(uname);
+      const isNowLocked = recordFailedAttempt(ip, uname);
       recordLoginFailure(request, uname);
       
       // Log security incident
@@ -105,7 +113,7 @@ export async function POST(request: Request) {
 
       // Alert if account just locked
       if (isNowLocked) {
-        const remainingSeconds = getLockoutTimeRemaining(uname);
+        const remainingSeconds = getLockoutTimeRemaining(ip, uname);
         return NextResponse.json(
           { error: `บัญชีถูกล็อกเนื่องจากพยายามล็อกอินล้มเหลวหลายครั้ง กรุณารอ ${remainingSeconds} วินาที` },
           { status: 429, headers: { 'Retry-After': String(remainingSeconds) } }
@@ -120,7 +128,7 @@ export async function POST(request: Request) {
 
     // Clear lockout on successful login
     if (uname) {
-      clearFailedAttempts(uname);
+      clearFailedAttempts(ip, uname);
     }
 
     // เดิม: ใช้ ADMIN_SESSION_TOKEN (ค่าคงที่ตัวเดียว) เป็น cookie ให้ทุกคนใช้ร่วมกัน

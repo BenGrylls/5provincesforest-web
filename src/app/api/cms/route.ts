@@ -5,7 +5,7 @@ import { logCsrfBlocked, logForbidden, writeAuditLog } from '@/lib/audit-log';
 import { sameOrigin } from '@/lib/csrf';
 import { isImage, isVideo, isPdf, saveUpload, type UploadFolder } from '@/lib/uploads';
 import { validateTitle, validateContent, validateUrl } from '@/lib/input-validation';
-import { checkRateLimit, recordRequest, getRateLimitStatus } from '@/lib/api-rate-limit';
+import { checkRateLimit, recordRequest, getRateLimitResetSeconds } from '@/lib/api-rate-limit';
 import { logException, logDatabaseError } from '@/lib/application-logger';
 import { logPerformance } from '@/lib/performance-logger';
 
@@ -124,10 +124,10 @@ export async function POST(request: Request) {
 
   // Rate limit: 30 mutations per 60 seconds per IP
   if (!checkRateLimit(request, 'mutation')) {
-    const status = getRateLimitStatus(request, 'mutation');
+    const retryAfter = getRateLimitResetSeconds(request, 'mutation');
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(status.reset) } },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
   }
   recordRequest(request, 'mutation');
@@ -298,10 +298,10 @@ export async function DELETE(request: Request) {
 
   // Rate limit: 30 mutations per 60 seconds per IP
   if (!checkRateLimit(request, 'mutation')) {
-    const status = getRateLimitStatus(request, 'mutation');
+    const retryAfter = getRateLimitResetSeconds(request, 'mutation');
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(status.reset) } },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
   }
   recordRequest(request, 'mutation');

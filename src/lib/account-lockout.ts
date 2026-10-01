@@ -26,13 +26,18 @@ function sweep() {
   }
 }
 
+// รวม ip เข้าไปใน key กัน attacker กระจายความพยายามไปหลาย IP เพื่อไม่ให้โดนล็อกแต่ยังถล่ม username เดิมได้
+function bucketKey(ip: string, username: string): string {
+  return `${ip}|${username.toLowerCase()}`;
+}
+
 /**
  * Check if username is locked out
  */
-export function isAccountLocked(username: string): boolean {
+export function isAccountLocked(ip: string, username: string): boolean {
   if (buckets.size > MAX_BUCKETS) sweep();
 
-  const key = `lockout:${username.toLowerCase()}`;
+  const key = bucketKey(ip, username);
   const bucket = buckets.get(key);
 
   if (!bucket) return false;
@@ -42,8 +47,8 @@ export function isAccountLocked(username: string): boolean {
 /**
  * Get remaining lockout time in seconds
  */
-export function getLockoutTimeRemaining(username: string): number {
-  const key = `lockout:${username.toLowerCase()}`;
+export function getLockoutTimeRemaining(ip: string, username: string): number {
+  const key = bucketKey(ip, username);
   const bucket = buckets.get(key);
 
   if (!bucket) return 0;
@@ -54,8 +59,8 @@ export function getLockoutTimeRemaining(username: string): number {
  * Record a failed login attempt
  * @returns true if account is now locked, false otherwise
  */
-export function recordFailedAttempt(username: string): boolean {
-  const key = `lockout:${username.toLowerCase()}`;
+export function recordFailedAttempt(ip: string, username: string): boolean {
+  const key = bucketKey(ip, username);
   const now = Date.now();
   const bucket = buckets.get(key) || { attempts: 0, lastAttempt: 0, lockedUntil: 0 };
 
@@ -83,8 +88,8 @@ export function recordFailedAttempt(username: string): boolean {
 /**
  * Clear failed attempts on successful login
  */
-export function clearFailedAttempts(username: string) {
-  const key = `lockout:${username.toLowerCase()}`;
+export function clearFailedAttempts(ip: string, username: string) {
+  const key = bucketKey(ip, username);
   buckets.delete(key);
   sweep();
 }
@@ -92,8 +97,8 @@ export function clearFailedAttempts(username: string) {
 /**
  * Get current attempt count for a username
  */
-export function getAttemptCount(username: string): number {
-  const key = `lockout:${username.toLowerCase()}`;
+export function getAttemptCount(ip: string, username: string): number {
+  const key = bucketKey(ip, username);
   const bucket = buckets.get(key);
   if (!bucket) return 0;
 

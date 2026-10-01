@@ -8,7 +8,7 @@ import { isPermission } from '@/lib/permissions';
 import { revokeSessionsFor } from '@/lib/session-revocation';
 import { validatePasswordComplexity } from '@/lib/password-validation';
 import { validateUsername, validateTitle } from '@/lib/input-validation';
-import { checkRateLimit, recordRequest, getRateLimitStatus } from '@/lib/api-rate-limit';
+import { checkRateLimit, recordRequest, getRateLimitResetSeconds } from '@/lib/api-rate-limit';
 
 /** กรองเฉพาะสิทธิ์ที่มีอยู่จริง เดิมรับ string อะไรก็ได้ พิมพ์ผิดก็บันทึกลงฐานข้อมูลแล้วไม่มีผลอะไร */
 function cleanPermissions(value: unknown) {
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
 
   // Rate limit: 30 mutations per 60 seconds per IP
   if (!checkRateLimit(request, 'mutation')) {
-    const status = getRateLimitStatus(request, 'mutation');
+    const retryAfter = getRateLimitResetSeconds(request, 'mutation');
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(status.reset) } },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
     );
   }
   recordRequest(request, 'mutation');
