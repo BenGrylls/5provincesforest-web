@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     let sql = 'SELECT * FROM admin_logs WHERE 1=1';
     const params: any[] = [];
 
-    // When exporting ALL, apply 120-day retention automatically (no manual date filters)
+    // When exporting ALL, apply 180-day retention automatically (no manual date filters)
     if (exportAll && isExport) {
       const retentionDate = new Date(Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
       params.push(retentionDate);

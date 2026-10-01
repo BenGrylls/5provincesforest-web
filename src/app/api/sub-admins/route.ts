@@ -103,6 +103,17 @@ export async function PATCH(request: Request) {
     await logForbidden(request, { username: actor?.username || 'unknown', category: 'admin', reason: 'ไม่ใช่ super admin' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Rate limit: 30 mutations per 60 seconds per IP
+  if (!checkRateLimit(request, 'mutation')) {
+    const retryAfter = getRateLimitResetSeconds(request, 'mutation');
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    );
+  }
+  recordRequest(request, 'mutation');
+
   const { id, permissions } = await request.json();
   if (!Number.isSafeInteger(id) || !Array.isArray(permissions)) {
     return NextResponse.json({ error: 'ข้อมูลสิทธิ์ไม่ถูกต้อง' }, { status: 400 });
