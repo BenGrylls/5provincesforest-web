@@ -14,8 +14,13 @@ interface AuditLog {
   details?: string;
 }
 
-// Legal retention period for audit logs (120 days as per requirement)
-const LOG_RETENTION_DAYS = 120;
+// Legal retention period for audit logs (180 days, matches SECURITY_RETENTION_DAYS in scripts/cleanup-logs.mjs)
+const LOG_RETENTION_DAYS = 180;
+
+function sanitizeCsvCell(value: string): string {
+  // กัน Excel formula injection — ค่าที่ขึ้นต้นด้วย = + - @ หรือ tab ให้เติม ' นำหน้า
+  return /^[=+\-@\t]/.test(value) ? `'${value}` : value;
+}
 
 // Convert JSON to CSV with UTF-8 BOM for Excel compatibility
 function convertToCSV(data: AuditLog[]): string {
@@ -27,13 +32,13 @@ function convertToCSV(data: AuditLog[]): string {
   const csvRows = data.map((log) => {
     return [
       log.id.toString(),
-      `"${(log.username || '').replace(/"/g, '""')}"`,
-      `"${(log.action || '').replace(/"/g, '""')}"`,
-      `"${(log.category || '').replace(/"/g, '""')}"`,
-      `"${(log.result || '').replace(/"/g, '""')}"`,
-      `"${(log.ip_address || '').replace(/"/g, '""')}"`,
-      `"${new Date(log.created_at).toISOString()}"`,
-      `"${(log.details || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(log.username || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(log.action || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(log.category || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(log.result || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(log.ip_address || '').replace(/"/g, '""')}"`,
+      `"${sanitizeCsvCell(new Date(log.created_at).toISOString())}"`,
+      `"${sanitizeCsvCell(log.details || '').replace(/"/g, '""')}"`,
     ].join(',');
   });
 
