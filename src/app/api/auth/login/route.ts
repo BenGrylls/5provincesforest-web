@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const uname = typeof username === 'string' ? username : '';
     if (!checkLoginAllowed(request, uname)) {
       // Log security incident
-      await logRateLimitExceeded(request, '/api/auth/login', 'passwordChange');
+      await logRateLimitExceeded(request, '/api/auth/login', 'login');
       await writeAuditLog({
         request,
         username: uname || 'unknown',

@@ -146,6 +146,16 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Rate limit: 30 mutations per 60 seconds per IP
+  if (!checkRateLimit(request, 'mutation')) {
+    const retryAfter = getRateLimitResetSeconds(request, 'mutation');
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    );
+  }
+  recordRequest(request, 'mutation');
+
   const id = Number(new URL(request.url).searchParams.get('id'));
   if (!Number.isSafeInteger(id)) return NextResponse.json({ error: 'ไม่พบบัญชีที่ต้องการลบ' }, { status: 400 });
 

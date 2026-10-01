@@ -95,7 +95,7 @@ export async function logFailedLoginAttempt(
 export async function logRateLimitExceeded(
   request: Request,
   endpoint: string,
-  limitType: 'mutation' | 'upload' | 'passwordChange' | 'passwordReset',
+  limitType: 'mutation' | 'upload' | 'passwordChange' | 'passwordReset' | 'login',
 ): Promise<void> {
   await logSecurityIncident({
     request,
