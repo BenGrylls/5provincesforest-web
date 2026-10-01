@@ -76,6 +76,8 @@ export async function initDB() {
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS series_key TEXT DEFAULT '';
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS episode_number INTEGER;
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS pdf_file TEXT DEFAULT '';
+    ALTER TABLE articles ADD COLUMN IF NOT EXISTS card_cover_image TEXT DEFAULT '';
+    ALTER TABLE articles ADD COLUMN IF NOT EXISTS html_url TEXT DEFAULT '';
 
     CREATE TABLE IF NOT EXISTS site_settings (
       id TEXT PRIMARY KEY DEFAULT 'global',
@@ -105,6 +107,17 @@ export async function initDB() {
       category TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS public_page_views (
+      view_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      route TEXT NOT NULL,
+      page_title TEXT,
+      view_count BIGINT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (view_date, route)
+    );
+    ALTER TABLE public_page_views ADD COLUMN IF NOT EXISTS page_title TEXT;
+    CREATE INDEX IF NOT EXISTS idx_public_page_views_date ON public_page_views (view_date DESC);
 
     -- ขยาย schema log ให้ trace ย้อนหลังได้แม่นยำขึ้น (เดิมมีแค่ target_title ซึ่งถ้าชื่อถูกแก้ทีหลัง
     -- จะสืบไม่ได้ว่า log เก่าพูดถึงแถวไหนจริงๆ) และเก็บ ip/user-agent/ผลลัพธ์/รายละเอียดก่อน-หลัง

@@ -1,11 +1,13 @@
 import React from 'react';
-import NewsList from '@/components/NewsList';
+import NewsList from '@/components/NewsListNew';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+
+const ITEMS_PER_PAGE = 10;
 
 type Article = {
   id: number;
@@ -18,14 +20,34 @@ type Article = {
   published_at?: string | Date | null;
 };
 
-export default async function NewsPage() {
+export default async function NewsPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  const pageParam = searchParams.page;
+  const currentPage = typeof pageParam === 'string' ? Math.max(1, parseInt(pageParam, 10)) : 1;
+  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
   let articles: Article[] = [];
+  let totalCount = 0;
+
   try {
-    const res = await query('SELECT *, created_at as published_at FROM articles WHERE category = $1 ORDER BY event_date DESC', ['news']);
+    const countResult = await query('SELECT COUNT(*) as count FROM articles WHERE category = $1', [
+      'news',
+    ]);
+    totalCount = parseInt(countResult.rows[0]?.count || '0', 10);
+
+    const res = await query(
+      'SELECT *, created_at as published_at FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT $2 OFFSET $3',
+      ['news', ITEMS_PER_PAGE, offset],
+    );
     articles = res.rows || [];
   } catch (e) {
     articles = [];
   }
+
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   return (
     <div className="min-h-screen flex flex-col bg-earth-100">
@@ -33,13 +55,16 @@ export default async function NewsPage() {
       <Navbar />
       <div className="bg-forest-950 py-16 text-center border-b-4 border-amber-500">
         <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">กิจกรรมและประชาสัมพันธ์</h1>
-        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">ติดตามข่าวสาร และกิจกรรมของมูลนิธิป่ารอยต่อ 5 จังหวัดภาคตะวันออก</p>
+        <p className="text-earth-100 font-serif max-w-2xl mx-auto px-4">
+          ติดตามข่าวสาร และกิจกรรมของมูลนิธิป่ารอยต่อ 5 จังหวัดภาคตะวันออก
+        </p>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-16 flex-1 w-full space-y-5">
-        <NewsList articles={articles} />
+        <NewsList articles={articles} currentPage={currentPage} totalPages={totalPages} />
       </main>
       <Footer />
     </div>
   );
 }
+

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, KeyRound, Loader, Save } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
 import { toast } from '@/components/admin/toast';
+import { getPasswordPolicyDescription, validatePasswordComplexity } from '@/lib/password-validation';
 
 export default function ChangePasswordPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -14,14 +15,17 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState('');
 
   const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
-  const tooShort = newPassword.length > 0 && newPassword.length < 8;
+  const passwordValidation = validatePasswordComplexity(newPassword);
+  const passwordValid = newPassword.length === 0 || passwordValidation.valid;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
     if (newPassword !== confirmPassword) { setError('รหัสผ่านใหม่และช่องยืนยันไม่ตรงกัน'); return; }
-    if (newPassword.length < 8) { setError('รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร'); return; }
+    
+    const validation = validatePasswordComplexity(newPassword);
+    if (!validation.valid) { setError(validation.errors[0]); return; }
 
     setSaving(true);
     const response = await fetch('/api/auth/change-password', {
@@ -52,7 +56,16 @@ export default function ChangePasswordPage() {
         <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-5 md:p-6 space-y-5">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
             <div className="p-3 bg-forest-50 rounded-xl text-forest-700 shrink-0"><KeyRound className="w-6 h-6" /></div>
-            <p className="text-sm text-gray-500">ตั้งรหัสผ่านที่ยาวอย่างน้อย 8 ตัวอักษร</p>
+            <div className="text-sm text-gray-500">
+              <p className="font-semibold mb-1">ข้อกำหนดรหัสผ่าน:</p>
+              <ul className="text-xs list-disc list-inside space-y-0.5">
+                <li>ยาวอย่างน้อย 8 ตัวอักษร</li>
+                <li>มีตัวอักษรพิมพ์ใหญ่ (A-Z)</li>
+                <li>มีตัวอักษรพิมพ์เล็ก (a-z)</li>
+                <li>มีตัวเลข (0-9)</li>
+                <li>มีอักขระพิเศษ (!@#$%^&* เป็นต้น)</li>
+              </ul>
+            </div>
           </div>
 
           <form onSubmit={submit} className="space-y-4">
@@ -77,9 +90,16 @@ export default function ChangePasswordPage() {
                 autoComplete="new-password"
                 minLength={8}
                 required
-                className={`${inputClass} ${tooShort ? 'border-amber-400' : ''}`}
+                className={`${inputClass} ${newPassword.length > 0 && !passwordValid ? 'border-amber-400' : ''}`}
               />
-              {tooShort && <p className="text-xs text-amber-700">ยังสั้นเกินไป ({newPassword.length}/8 ตัวอักษร)</p>}
+              {newPassword.length > 0 && !passwordValid && (
+                <div className="text-xs space-y-1 text-amber-700">
+                  {passwordValidation.errors.map((err, i) => (
+                    <p key={i}>❌ {err}</p>
+                  ))}
+                </div>
+              )}
+              {passwordValid && newPassword.length > 0 && <p className="text-xs text-green-600">✅ รหัสผ่านตรงตามข้อกำหนด</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -109,7 +129,7 @@ export default function ChangePasswordPage() {
 
             <button
               type="submit"
-              disabled={saving || mismatch || tooShort}
+              disabled={saving || mismatch || !passwordValid}
               className="w-full flex justify-center items-center gap-2 py-3 bg-forest-700 hover:bg-forest-800 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium transition"
             >
               {saving ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} บันทึกรหัสผ่านใหม่

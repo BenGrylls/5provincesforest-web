@@ -6,6 +6,10 @@ import { query } from '@/lib/db';
 import { verifyPassword } from '@/lib/security';
 // PATCH(1): rate limiting + audit log ของความพยายามที่ล้มเหลว
 import { checkLoginAllowed, recordLoginFailure, retryAfterSeconds } from '@/lib/rate-limit';
+import { isAccountLocked, recordFailedAttempt, clearFailedAttempts, getLockoutTimeRemaining } from '@/lib/account-lockout';
+// PATCH(2): Security and error logging
+import { logFailedLoginAttempt, logRateLimitExceeded } from '@/lib/security-logger';
+import { logException } from '@/lib/application-logger';
 
 // เดิมใช้ secure: process.env.NODE_ENV === 'production' — แต่ `next start` ตั้ง NODE_ENV=production
 // เสมอไม่ว่าจะ serve ผ่าน HTTP หรือ HTTPS จริง ทำให้เข้าเว็บผ่าน HTTP ในวงแลน (ไม่มี TLS) แล้ว cookie
@@ -32,7 +36,8 @@ export async function POST(request: Request) {
     // PATCH(1): block ถ้าพยายามเกิน 5 ครั้งใน 15 นาที (ต่อ IP+username)
     const uname = typeof username === 'string' ? username : '';
     if (!checkLoginAllowed(request, uname)) {
-      console.warn(`[auth] rate-limited login for "${uname}"`);
+      // Log security incident
+      await logRateLimitExceeded(request, '/api/auth/login', 'passwordChange');
       await writeAuditLog({
         request,
         username: uname || 'unknown',
@@ -45,6 +50,24 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'พยายามล็อกอินมากเกินไป กรุณารอสักครู่แล้วลองอีกครั้ง' },
         { status: 429, headers: { 'Retry-After': String(retryAfterSeconds(request, uname)) } }
+      );
+    }
+
+    // Check account lockout (exponential backoff after failed attempts)
+    if (uname && isAccountLocked(uname)) {
+      const remainingSeconds = getLockoutTimeRemaining(uname);
+      await writeAuditLog({
+        request,
+        username: uname,
+        action: 'LOGIN_ACCOUNT_LOCKED',
+        category: 'auth',
+        targetType: 'session',
+        targetTitle: uname,
+        result: 'locked',
+      });
+      return NextResponse.json(
+        { error: `บัญชีนี้ถูกล็อกชั่วคราว กรุณารอ ${remainingSeconds} วินาที` },
+        { status: 429, headers: { 'Retry-After': String(remainingSeconds) } }
       );
     }
 
@@ -63,7 +86,12 @@ export async function POST(request: Request) {
     }
     if (!isValid) {
       // PATCH(1): นับความพยายามที่ล้มเหลว + บันทึกลง admin_logs (fail2ban ยึดจาก log นี้ได้)
+      const isNowLocked = recordFailedAttempt(uname);
       recordLoginFailure(request, uname);
+      
+      // Log security incident
+      await logFailedLoginAttempt(request, uname, 'invalid_credentials');
+      
       // เดิมต้องยัด IP ใส่ target_title เพราะไม่มีคอลัมน์ ip_address ตอนนี้มีคอลัมน์จริงแล้ว เก็บแยกให้ถูกที่
       await writeAuditLog({
         request,
@@ -74,10 +102,25 @@ export async function POST(request: Request) {
         targetTitle: uname || 'unknown',
         result: 'failed',
       });
+
+      // Alert if account just locked
+      if (isNowLocked) {
+        const remainingSeconds = getLockoutTimeRemaining(uname);
+        return NextResponse.json(
+          { error: `บัญชีถูกล็อกเนื่องจากพยายามล็อกอินล้มเหลวหลายครั้ง กรุณารอ ${remainingSeconds} วินาที` },
+          { status: 429, headers: { 'Retry-After': String(remainingSeconds) } }
+        );
+      }
+
       return NextResponse.json(
         { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' },
         { status: 401 }
       );
+    }
+
+    // Clear lockout on successful login
+    if (uname) {
+      clearFailedAttempts(uname);
     }
 
     // เดิม: ใช้ ADMIN_SESSION_TOKEN (ค่าคงที่ตัวเดียว) เป็น cookie ให้ทุกคนใช้ร่วมกัน
@@ -110,7 +153,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Login error:', error);
+    // Log error untuk debugging
+    await logException(error, {
+      endpoint: '/api/auth/login',
+      action: 'login_attempt',
+    });
     return NextResponse.json(
       { error: 'เกิดข้อผิดพลาดในระบบ' },
       { status: 500 }

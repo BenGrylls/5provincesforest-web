@@ -6,6 +6,9 @@ import { query } from '@/lib/db';
 import { hashPassword } from '@/lib/security';
 import { isPermission } from '@/lib/permissions';
 import { revokeSessionsFor } from '@/lib/session-revocation';
+import { validatePasswordComplexity } from '@/lib/password-validation';
+import { validateUsername, validateTitle } from '@/lib/input-validation';
+import { checkRateLimit, recordRequest, getRateLimitStatus } from '@/lib/api-rate-limit';
 
 /** กรองเฉพาะสิทธิ์ที่มีอยู่จริง เดิมรับ string อะไรก็ได้ พิมพ์ผิดก็บันทึกลงฐานข้อมูลแล้วไม่มีผลอะไร */
 function cleanPermissions(value: unknown) {
@@ -34,14 +37,42 @@ export async function POST(request: Request) {
     await logForbidden(request, { username: actor?.username || 'unknown', category: 'admin', reason: 'ไม่ใช่ super admin' });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Rate limit: 30 mutations per 60 seconds per IP
+  if (!checkRateLimit(request, 'mutation')) {
+    const status = getRateLimitStatus(request, 'mutation');
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(status.reset) } },
+    );
+  }
+  recordRequest(request, 'mutation');
+
   const { name, username, password, permissions } = await request.json();
-  if (typeof name !== 'string' || typeof username !== 'string' || typeof password !== 'string' || !name.trim() || !username.trim() || password.length < 8) {
-    return NextResponse.json({ error: 'กรุณาระบุชื่อ Username และรหัสผ่านอย่างน้อย 8 ตัวอักษร' }, { status: 400 });
+  if (typeof name !== 'string' || typeof username !== 'string' || typeof password !== 'string' || !name.trim() || !username.trim()) {
+    return NextResponse.json({ error: 'กรุณาระบุชื่อ Username และรหัสผ่าน' }, { status: 400 });
+  }
+
+  // Validate inputs
+  const nameValidation = validateTitle(name);
+  if (!nameValidation.valid) {
+    return NextResponse.json({ error: nameValidation.error }, { status: 400 });
+  }
+
+  const usernameValidation = validateUsername(username);
+  if (!usernameValidation.valid) {
+    return NextResponse.json({ error: usernameValidation.error }, { status: 400 });
+  }
+
+  // Validate password complexity
+  const passwordValidation = validatePasswordComplexity(password);
+  if (!passwordValidation.valid) {
+    return NextResponse.json({ error: passwordValidation.errors[0] }, { status: 400 });
   }
   try {
     const result = await query(
       'INSERT INTO sub_admins (name, username, password_hash, permissions) VALUES ($1, $2, $3, $4) RETURNING id, name, username, permissions',
-      [name.trim(), username.trim(), await hashPassword(password), cleanPermissions(permissions)],
+      [nameValidation.value, usernameValidation.value, await hashPassword(password), cleanPermissions(permissions)],
     );
     const created = result.rows[0];
     const actor = await getAdminSession(request);

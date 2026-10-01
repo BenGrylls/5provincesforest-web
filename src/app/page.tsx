@@ -4,9 +4,10 @@ import { Calendar, FileText, PlayCircle, ArrowRight, Leaf } from 'lucide-react';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import HomeMediaCards from '@/components/HomeMediaCards';
+import HomeMediaCards, { UploadedVideoThumbnail } from '@/components/HomeMediaCards';
 import ImportantDayCover from '@/components/ImportantDayCover';
 import { query } from '@/lib/db';
+import { videoThumbnail } from '@/lib/video-thumb';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +17,9 @@ type NewsArticle = {
   content?: string | null;
   event_date?: string | Date | null;
   image_paths?: string[] | null;
+  card_cover_image?: string | null;
+  video_file?: string | null;
+  social_video_url?: string | null;
 };
 
 type MediaArticle = {
@@ -34,6 +38,7 @@ type Publication = {
   content?: string | null;
   event_date?: string | Date | null;
   pdf_file?: string | null;
+  html_url?: string | null;
 };
 
 export default async function HomePage() {
@@ -45,7 +50,7 @@ export default async function HomePage() {
   try {
     const [newsResult, mediaResult, publicationResult, settingsResult] = await Promise.all([
       query(
-        `SELECT id, title, content, event_date, image_paths
+        `SELECT id, title, content, event_date, image_paths, card_cover_image, video_file, social_video_url
        FROM articles
        WHERE category = $1
        ORDER BY event_date DESC NULLS LAST, created_at DESC
@@ -53,7 +58,7 @@ export default async function HomePage() {
         ['news']
       ),
       query('SELECT id, title, content, image_paths, video_file, social_video_url FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT 4', ['media']),
-      query('SELECT id, title, content, event_date, pdf_file FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT 3', ['publications']),
+      query('SELECT id, title, content, event_date, pdf_file, html_url FROM articles WHERE category = $1 ORDER BY event_date DESC NULLS LAST, created_at DESC LIMIT 3', ['publications']),
       query('SELECT important_cover_enabled, important_cover_image, important_cover_title, important_cover_message, important_cover_link, important_cover_link_text, important_cover_subtitle, important_cover_date, important_cover_footer, important_cover_ornament, important_cover_title_size, important_cover_subtitle_size, important_cover_date_size, important_cover_footer_size FROM site_settings WHERE id = $1', ['global']),
     ]);
     latestNews = newsResult.rows || [];
@@ -76,6 +81,21 @@ export default async function HomePage() {
         <div className="absolute inset-0 z-0">
           <img src="https://images.unsplash.com/photo-1511497584788-876760111969?q=80&w=2000" alt="Forest Background" className="w-full h-full object-cover opacity-60" />
           <div className="absolute inset-0 bg-gradient-to-r from-forest-950/90 via-forest-900/60 to-transparent mix-blend-multiply"></div>
+        </div>
+
+        {/* Wildlife Video Hero */}
+        <div className="absolute inset-0 z-5 overflow-hidden">
+          <video 
+            autoPlay 
+            muted 
+            loop 
+            playsInline
+            className="w-full h-full object-cover opacity-80"
+            style={{ mixBlendMode: 'screen' }}
+          >
+            <source src="/videos/hero-wildlife.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 md:px-8 relative z-10 w-full">
@@ -112,29 +132,40 @@ export default async function HomePage() {
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {latestNews.map((item) => (
-              <Link key={item.id} href={`/news/${item.id}`} className="group">
-                <article className="h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
-                  <div className="aspect-[4/3] bg-earth-200 overflow-hidden">
-                    {Array.isArray(item.image_paths) && item.image_paths[0] && (
-                      <img src={item.image_paths[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                    )}
-                  </div>
-                  <div className="hidden">
-                    <div className="text-sm text-earth-500"><Calendar className="w-4 h-4 inline mr-1" /> 9 ก.ย. 2569</div>
-                    <h4 className="font-bold text-lg text-forest-950">คณะอนุกรรมการฝ่ายอนุรักษ์ทรัพยากรดินและน้ำ ตรวจความคืบหน้าฝายชะลอน้ำ</h4>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <div className="text-sm text-earth-500">
-                      <Calendar className="w-4 h-4 inline mr-1" />
-                      {item.event_date ? new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+            {latestNews.map((item) => {
+              const cover = item.card_cover_image || item.image_paths?.[0] || videoThumbnail(item.social_video_url);
+              const hasVideo = Boolean(item.social_video_url || item.video_file);
+              return (
+                <Link key={item.id} href={`/news/${item.id}`} className="group">
+                  <article className="h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
+                    <div className="relative aspect-[4/3] bg-earth-200 overflow-hidden">
+                      {cover ? (
+                        <img src={cover} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                      ) : item.video_file ? (
+                        <UploadedVideoThumbnail source={item.video_file} title={item.title} />
+                      ) : hasVideo ? (
+                        <div className="w-full h-full bg-forest-950 flex items-center justify-center">
+                          <PlayCircle className="w-14 h-14 text-white/70" />
+                        </div>
+                      ) : null}
+                      {cover && hasVideo && (
+                        <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <PlayCircle className="w-12 h-12 text-white/90 drop-shadow-lg" />
+                        </span>
+                      )}
                     </div>
-                    <h4 className="font-bold text-lg text-forest-950 group-hover:text-forest-700 transition line-clamp-2">{item.title}</h4>
-                    {item.content && <p className="text-sm text-earth-600 line-clamp-2">{item.content}</p>}
-                  </div>
-                </article>
-              </Link>
-            ))}
+                    <div className="p-6 space-y-4">
+                      <div className="text-sm text-earth-500">
+                        <Calendar className="w-4 h-4 inline mr-1" />
+                        {item.event_date ? new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}
+                      </div>
+                      <h4 className="font-bold text-lg text-forest-950 group-hover:text-forest-700 transition line-clamp-2">{item.title}</h4>
+                      {item.content && <p className="text-sm text-earth-600 line-clamp-2">{item.content}</p>}
+                    </div>
+                  </article>
+                </Link>
+              );
+            })}
             {latestNews.length === 0 && (
               <div className="col-span-full rounded-2xl border border-dashed border-gray-300 py-10 text-center text-earth-500">
                 ไม่มีข้อมูลกิจกรรมและประชาสัมพันธ์ในขณะนี้
@@ -179,7 +210,7 @@ export default async function HomePage() {
               <div key={item.id} className="flex items-center gap-3 p-6 border-b border-gray-50 last:border-b-0 hover:bg-forest-50/50">
                 <FileText className="w-5 h-5 text-forest-700 shrink-0" />
                 <div className="min-w-0">
-                  {item.pdf_file ? <Link href={`/publications/${item.id}`} className="font-semibold text-forest-950 hover:text-forest-700 hover:underline">{item.title}</Link> : <h4 className="font-semibold text-forest-950">{item.title}</h4>}
+                  {item.pdf_file || item.html_url ? <Link href={`/publications/${item.id}`} className="font-semibold text-forest-950 hover:text-forest-700 hover:underline">{item.title}</Link> : <h4 className="font-semibold text-forest-950">{item.title}</h4>}
                   {item.content && <p className="mt-1 text-sm text-earth-600 line-clamp-1">{item.content}</p>}
                   {item.event_date && <p className="mt-1 text-xs text-earth-500">{new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' })}</p>}
                 </div>

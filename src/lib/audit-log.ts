@@ -1,6 +1,6 @@
 import { query } from './db';
 
-export type AuditResult = 'success' | 'failed' | 'forbidden';
+export type AuditResult = 'success' | 'failed' | 'forbidden' | 'locked';
 
 export type AuditLogInput = {
   /** request ปัจจุบัน — ใช้ดึง IP และ user agent อัตโนมัติ */

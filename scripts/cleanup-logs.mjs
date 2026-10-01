@@ -57,9 +57,19 @@ async function main() {
       [SECURITY_ACTIONS],
     );
 
+    const pageViewsTable = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'public_page_views'
+      ) AS exists`,
+    );
+    const pageViewsResult = pageViewsTable.rows[0].exists
+      ? await pool.query("DELETE FROM public_page_views WHERE created_at < NOW() - INTERVAL '90 days'")
+      : { rowCount: 0 };
+
     console.log(`[${new Date().toISOString()}] cleanup-logs เสร็จสิ้น`);
     console.log(`  ลบ log ทั่วไปที่เก่ากว่า ${NORMAL_RETENTION_DAYS} วัน: ${normalResult.rowCount} แถว`);
     console.log(`  ลบ log ความปลอดภัยที่เก่ากว่า ${SECURITY_RETENTION_DAYS} วัน: ${securityResult.rowCount} แถว`);
+    console.log(`  ลบสถิติผู้เข้าชมที่เก่ากว่า 90 วัน: ${pageViewsResult.rowCount} แถว`);
   } finally {
     await pool.end();
   }

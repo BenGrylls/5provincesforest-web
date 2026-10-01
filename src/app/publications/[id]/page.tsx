@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileText } from 'lucide-react';
 import AccessibilityBar from '@/components/AccessibilityBar';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -14,6 +14,7 @@ type Publication = {
   title: string;
   content?: string | null;
   pdf_file?: string | null;
+  html_url?: string | null;
   event_date?: string | Date | null;
 };
 
@@ -23,12 +24,12 @@ export default async function PublicationReaderPage({ params }: { params: Promis
 
   let publication: Publication | undefined;
   try {
-    const result = await query('SELECT id, title, content, pdf_file, event_date FROM articles WHERE id = $1 AND category = $2', [id, 'publications']);
+    const result = await query('SELECT id, title, content, pdf_file, html_url, event_date FROM articles WHERE id = $1 AND category = $2', [id, 'publications']);
     publication = result.rows[0];
   } catch {
     notFound();
   }
-  if (!publication?.pdf_file) notFound();
+  if (!publication?.pdf_file && !publication?.html_url) notFound();
   const pdfViewerUrl = `/api/publications/${publication.id}/pdf`;
 
   return (
@@ -42,7 +43,31 @@ export default async function PublicationReaderPage({ params }: { params: Promis
             <div className="flex items-start gap-3"><FileText className="w-7 h-7 text-forest-700 shrink-0 mt-1" /><div><h1 className="text-2xl md:text-3xl font-bold text-forest-950">{publication.title}</h1>{publication.event_date && <p className="text-sm text-earth-600 mt-2">เผยแพร่เมื่อ {new Date(publication.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>}</div></div>
           </header>
           {publication.content && <p className="px-6 md:px-8 pt-6 text-earth-700 font-serif whitespace-pre-wrap">{publication.content}</p>}
-          <div className="p-4 md:p-6"><PdfEbookReaderClient url={pdfViewerUrl} title={publication.title} /></div>
+          {publication.pdf_file ? (
+            <div className="p-4 md:p-6 space-y-4">
+              <PdfEbookReaderClient url={pdfViewerUrl} title={publication.title} />
+              {publication.html_url && (
+                <a href={publication.html_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-forest-700 hover:text-forest-950">
+                  <ExternalLink className="w-4 h-4" /> เปิดเวอร์ชัน HTML
+                </a>
+              )}
+            </div>
+          ) : publication.html_url ? (
+            <div className="p-4 md:p-6 space-y-3">
+              <iframe
+                src={publication.html_url}
+                title={publication.title}
+                className="w-full h-[75vh] min-h-[480px] border border-gray-200 rounded-lg bg-white"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                allowFullScreen
+              />
+              <a href={publication.html_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-forest-700 hover:text-forest-950">
+                <ExternalLink className="w-4 h-4" /> เปิดเอกสารในหน้าต่างใหม่
+              </a>
+            </div>
+          ) : null}
         </article>
       </main>
       <Footer />

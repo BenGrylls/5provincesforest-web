@@ -139,7 +139,7 @@ export async function PUT(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Save error:", error);
+    // Log ไปที่ server logs/monitoring แต่ไม่ respond ให้ client ได้เห็น error details
     return NextResponse.json({ success: false, message: "เกิดข้อผิดพลาดในการบันทึกข้อมูล" }, { status: 500 });
   }
 }

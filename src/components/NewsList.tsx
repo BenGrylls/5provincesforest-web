@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Calendar, Clock, ExternalLink, Search } from 'lucide-react';
+import { ArrowRight, Calendar, Clock, Search, PlayCircle } from 'lucide-react';
 
 type Article = {
   id: number;
@@ -14,6 +14,51 @@ type Article = {
   social_video_url?: string | null;
   published_at?: string | Date | null;
 };
+
+function videoThumbnail(videoUrl?: string | null): string | null {
+  if (!videoUrl) return null;
+  try {
+    const url = new URL(videoUrl);
+    const host = url.hostname.replace(/^www\./, '');
+    let id: string | null | undefined;
+    if (host === 'youtu.be') {
+      id = url.pathname.split('/').filter(Boolean)[0];
+    } else if (host === 'youtube.com' || host === 'm.youtube.com') {
+      id =
+        url.searchParams.get('v') ||
+        url.pathname.match(/^\/(?:shorts|embed)\/([^/?]+)/)?.[1];
+    }
+    return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : null;
+  } catch {
+    return null;
+  }
+}
+
+function UploadedVideoThumbnail({ source, title }: { source?: string | null; title: string }) {
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!source) return;
+    const video = document.createElement('video');
+    video.src = source;
+    video.muted = true;
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => { video.currentTime = Math.min(1, Math.max(0, video.duration - 0.1)); };
+    video.onseeked = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (context && canvas.width && canvas.height) {
+        context.drawImage(video, 0, 0);
+        setThumbnail(canvas.toDataURL('image/jpeg', 0.82));
+      }
+    };
+    return () => { video.removeAttribute('src'); video.load(); };
+  }, [source]);
+
+  return thumbnail ? <img src={thumbnail} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" /> : null;
+}
 
 export default function NewsList({ articles }: { articles: Article[] }) {
   const [search, setSearch] = useState('');
@@ -38,9 +83,27 @@ export default function NewsList({ articles }: { articles: Article[] }) {
 
 function NewsCard({ item }: { item: Article }) {
   const images = Array.isArray(item.image_paths) ? item.image_paths : [];
+  const cover = images[0] || videoThumbnail(item.social_video_url);
+  const hasVideo = Boolean(item.social_video_url || item.video_file);
+  
   return <article className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group flex flex-col">
     <div className="aspect-video bg-earth-200 relative overflow-hidden flex items-center justify-center">
-      {images.length ? <img src={images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" /> : item.video_file ? <video src={item.video_file} controls preload="metadata" className="w-full h-full object-cover" /> : item.social_video_url ? <div className="w-full h-full bg-gray-900 flex flex-col items-center justify-center p-4 text-center space-y-2"><ExternalLink className="w-8 h-8 text-amber-400" /><a href={item.social_video_url} target="_blank" rel="noreferrer" className="text-xs text-white underline">รับชมคลิปวิดีโอภายนอก</a></div> : <div className="text-earth-400 text-xs">ไม่มีไฟล์มีเดีย</div>}
+      {cover ? (
+        <img src={cover} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+      ) : item.video_file ? (
+        <UploadedVideoThumbnail source={item.video_file} title={item.title} />
+      ) : hasVideo ? (
+        <div className="w-full h-full bg-forest-950 flex items-center justify-center">
+          <PlayCircle className="w-14 h-14 text-white/70" />
+        </div>
+      ) : (
+        <div className="text-earth-400 text-xs">ไม่มีไฟล์มีเดีย</div>
+      )}
+      {hasVideo && (
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <PlayCircle className="w-12 h-12 text-white/90 drop-shadow-lg" />
+        </span>
+      )}
     </div>
     <div className="p-6 space-y-3 flex-1 flex flex-col">
       <div className="flex justify-between gap-2 items-center text-xs text-earth-500"><span className="flex items-center gap-1 bg-gray-100 px-2.5 py-1 rounded-lg font-medium text-forest-800"><Calendar className="w-3.5 h-3.5" /> {item.event_date ? new Date(item.event_date).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'}</span>{images.length > 1 && <span>{images.length} รูป</span>}</div>

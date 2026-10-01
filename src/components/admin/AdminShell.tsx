@@ -25,6 +25,7 @@ const PATH_TO_KEY: Record<string, string> = {
   '/admin/objectives': 'objectives',
   '/admin/committee': 'committee',
   '/admin/committee/president-bio': 'committee',
+  '/admin/visitors': 'visitors',
   '/admin/sub-admins': 'sub-admins',
   '/admin/settings': 'settings',
   '/admin/change-password': 'change-password',

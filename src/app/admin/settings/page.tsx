@@ -1,5 +1,6 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Image as ImageIcon, Loader, Save, ShieldAlert, Sparkles } from 'lucide-react';
 import AdminShell from '@/components/admin/AdminShell';
 import { toast } from '@/components/admin/toast';
@@ -36,6 +37,7 @@ function SizedField({ label, hint, children, size, onSizeChange }: {
 }
 
 export default function AdminSettingsPage() {
+  const router = useRouter();
   const [isGrayscale, setIsGrayscale] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
   const [savingCover, setSavingCover] = useState(false);
@@ -95,8 +97,13 @@ export default function AdminSettingsPage() {
       body: JSON.stringify({ isGrayscale }),
     }).catch(() => null);
     setSavingTheme(false);
-    if (response?.ok) toast.success('บันทึกการตั้งค่าและอัปเดตหน้าเว็บจริงแล้ว');
-    else toast.error('บันทึกการตั้งค่าไม่สำเร็จ');
+    if (response?.ok) {
+      document.body.classList.remove('grayscale');
+      router.refresh();
+      toast.success('บันทึกการตั้งค่าและอัปเดตหน้าเว็บจริงแล้ว');
+    } else {
+      toast.error('บันทึกการตั้งค่าไม่สำเร็จ');
+    }
   };
 
   const handleSaveCover = async () => {

@@ -25,7 +25,7 @@ function youtubeThumbnail(value?: string | null) {
   }
 }
 
-function UploadedVideoThumbnail({ source, title }: { source?: string | null; title: string }) {
+export function UploadedVideoThumbnail({ source, title }: { source?: string | null; title: string }) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
 
   useEffect(() => {

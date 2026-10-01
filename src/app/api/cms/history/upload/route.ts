@@ -55,8 +55,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: "อัปโหลดรูปภาพสำเร็จ", url });
   } catch (error) {
-    console.error("Upload error:", error);
-    const message = error instanceof Error ? error.message : "เกิดข้อผิดพลาดขณะอัปโหลดไฟล์";
-    return NextResponse.json({ success: false, message }, { status: 400 });
+    // Log ไปที่ server logs/monitoring แต่ไม่ respond ให้ client ได้เห็น error details
+    return NextResponse.json({ success: false, message: "เกิดข้อผิดพลาดขณะอัปโหลดไฟล์" }, { status: 400 });
   }
 }

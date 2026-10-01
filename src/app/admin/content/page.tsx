@@ -36,13 +36,16 @@ function AdminContentInner() {
   const [eventDate, setEventDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [imagePathsInput, setImagePathsInput] = useState('');
+  const [cardCoverImage, setCardCoverImage] = useState('');
   const [videoFileText, setVideoFileText] = useState('');
   const [pdfFileText, setPdfFileText] = useState('');
+  const [htmlUrl, setHtmlUrl] = useState('');
   const [socialVideoUrl, setSocialVideoUrl] = useState('');
   const [seriesKey, setSeriesKey] = useState('');
   const [episodeNumber, setEpisodeNumber] = useState('');
 
   const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
+  const [selectedCardCoverFile, setSelectedCardCoverFile] = useState<File | null>(null);
   const [selectedVideoFile, setSelectedVideoFile] = useState<File | null>(null);
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [seriesKeys, setSeriesKeys] = useState<string[]>([]);
@@ -52,6 +55,7 @@ function AdminContentInner() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cardCoverInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +130,13 @@ function AdminContentInner() {
     setImagePathsInput(fileList.map(f => f.name).join(', '));
   };
 
+  const handleCardCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedCardCoverFile(file);
+    setCardCoverImage(file.name);
+  };
+
   const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -192,12 +203,15 @@ function AdminContentInner() {
     setContent('');
     setEventDate(new Date().toISOString().split('T')[0]);
     setImagePathsInput('');
+    setCardCoverImage('');
     setVideoFileText('');
     setPdfFileText('');
+    setHtmlUrl('');
     setSocialVideoUrl('');
     setSeriesKey('');
     setEpisodeNumber('');
     setSelectedImageFiles([]);
+    setSelectedCardCoverFile(null);
     setSelectedVideoFile(null);
     setSelectedPdfFile(null);
     setUploadProgress(0);
@@ -211,12 +225,15 @@ function AdminContentInner() {
     setContent(item.content || '');
     setEventDate(item.event_date ? item.event_date.split('T')[0] : new Date().toISOString().split('T')[0]);
     setImagePathsInput(Array.isArray(item.image_paths) ? item.image_paths.join(', ') : '');
+    setCardCoverImage(item.card_cover_image || '');
     setVideoFileText(item.video_file || '');
     setPdfFileText(item.pdf_file || '');
+    setHtmlUrl(item.html_url || '');
     setSocialVideoUrl(item.social_video_url || '');
     setSeriesKey(item.series_key || '');
     setEpisodeNumber(item.episode_number ? String(item.episode_number) : '');
     setSelectedImageFiles([]);
+    setSelectedCardCoverFile(null);
     setSelectedVideoFile(null);
     setSelectedPdfFile(null);
     setUploadProgress(0);
@@ -242,12 +259,18 @@ function AdminContentInner() {
     formData.append('seriesKey', seriesKey);
     formData.append('episodeNumber', episodeNumber);
     formData.append('existingImages', imagePathsInput);
+    formData.append('existingCardCover', cardCoverImage);
     formData.append('existingVideo', videoFileText);
     formData.append('existingPdf', pdfFileText);
+    formData.append('htmlUrl', htmlUrl);
 
     selectedImageFiles.forEach(file => {
       formData.append('imageFiles', file);
     });
+
+    if (selectedCardCoverFile) {
+      formData.append('cardCoverFile', selectedCardCoverFile);
+    }
 
     if (selectedVideoFile) {
       formData.append('videoFile', selectedVideoFile);
@@ -327,6 +350,7 @@ function AdminContentInner() {
       {item.image_paths?.length > 0 && <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-xs font-bold">{item.image_paths.length} รูป</span>}
       {item.video_file && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">MP4</span>}
       {item.pdf_file && <span className="bg-cyan-50 text-cyan-700 px-2 py-0.5 rounded text-xs font-bold">PDF</span>}
+      {item.html_url && <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">HTML</span>}
       {item.social_video_url && <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-xs font-bold">โซเชียล</span>}
     </>
   );
@@ -502,6 +526,43 @@ function AdminContentInner() {
 
               {activeTab === 'news' && (
                 <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                    <ImageIcon className="w-4 h-4 text-forest-700" /> ภาพปกการ์ดหน้าแรกและหน้า /news
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">แยกจากรูปประกอบกิจกรรม ใช้ได้แม้รายการมีเฉพาะลิงก์วิดีโอ</p>
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="text"
+                      value={cardCoverImage}
+                      readOnly
+                      placeholder="ยังไม่ได้เลือกภาพปก"
+                      className="min-w-0 flex-1 px-3 py-2.5 border rounded-xl text-sm bg-gray-50"
+                    />
+                    <input
+                      type="file"
+                      ref={cardCoverInputRef}
+                      onChange={handleCardCoverSelect}
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                    />
+                    <button type="button" onClick={() => cardCoverInputRef.current?.click()} className="px-4 bg-forest-700 text-white rounded-xl text-xs font-medium hover:bg-forest-800 transition flex items-center gap-1 shrink-0 h-10">
+                      <FolderOpen className="w-4 h-4" /> เลือกปก
+                    </button>
+                    {cardCoverImage && (
+                      <button
+                        type="button"
+                        onClick={() => { setCardCoverImage(''); setSelectedCardCoverFile(null); if (cardCoverInputRef.current) cardCoverInputRef.current.value = ''; }}
+                        className="px-3 border border-gray-300 text-gray-700 rounded-xl text-xs font-medium hover:bg-gray-50"
+                      >
+                        เอาปกออก
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'news' && (
+                <div>
                   <label className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1"><ImageIcon className="w-4 h-4 text-forest-700" /> ไฟล์รูปภาพ JPG, PNG, WebP (เลือกหลายรูป)</label>
                   <div className="flex gap-2">
                     <textarea value={imagePathsInput} onChange={e => setImagePathsInput(e.target.value)} placeholder="คลิกเรียกดูเพื่อเลือกรูปภาพ..." rows={2} className="flex-1 px-3 py-2 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-forest-500"></textarea>
@@ -573,6 +634,23 @@ function AdminContentInner() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'publications' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                    <Link2 className="w-4 h-4 text-blue-600" /> ลิงก์เอกสาร HTML / FlipHTML5
+                  </label>
+                  <input
+                    type="url"
+                    value={htmlUrl}
+                    onChange={(event) => setHtmlUrl(event.target.value)}
+                    placeholder="https://online.fliphtml5.com/..."
+                    maxLength={500}
+                    className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-forest-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">กรอกลิงก์ HTTPS เพื่อเปิดอ่านในหน้าเอกสาร ไม่ต้องอัปโหลด PDF</p>
                 </div>
               )}
 

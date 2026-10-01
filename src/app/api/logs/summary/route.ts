@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       warnings,
     });
   } catch (error) {
-    console.error('GET /api/logs/summary error:', error);
+    // Log ไปที่ server logs/monitoring แต่ไม่ respond ให้ client ได้เห็น error details
     return NextResponse.json({ loginFailures: [], rateLimited: [], recentDenied: [], warnings: [] }, { status: 500 });
   }
 }

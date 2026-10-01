@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  BarChart3,
   Film,
   History,
   KeyRound,
@@ -53,7 +54,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'media', label: 'สื่อและสารคดีธรรมชาติ', icon: Film, href: '/admin/content?tab=media', permission: 'สื่อและสารคดีธรรมชาติ' },
       { key: 'publications', label: 'คลังเอกสารและวารสาร', icon: BookOpen, href: '/admin/content?tab=publications', permission: 'คลังเอกสารและวารสาร' },
       { key: 'committee', label: 'โครงสร้างคณะกรรมการ', icon: Users, href: '/admin/committee', permission: 'โครงสร้างคณะกรรมการ' },
-      { key: 'logs', label: 'ประวัติการทำงาน (Logs)', icon: History, href: '/admin/content?tab=logs', superOnly: true },
+      { key: 'logs', label: 'ประวัติการทำงาน', icon: History, href: '/admin/logs', superOnly: true },
+      { key: 'visitors', label: 'สถิติผู้เข้าชม', icon: BarChart3, href: '/admin/visitors', superOnly: true },
     ],
   },
   {
